@@ -1,8 +1,11 @@
-from scipy.optimize import fsolve
+from scipy.optimize import fsolve, brentq
+from scipy.special import lambertw
 import numpy as np
 import matplotlib.pyplot as plt
 import mplcursors
 from function_timer import FunctionTimer
+
+# At some point, this paper may be of interest: https://arxiv.org/pdf/1601.02679.pdf
 
 
 class pv_model:
@@ -136,17 +139,63 @@ class pv_model:
         Vmpp = self.Vmpp
 
         # Define the equations
+        # f1: Condition at open circuit (I=0)
         f1 = Iph - Io * (np.exp(Voc / (a * Ns * Vt)) - 1) - Voc / Rsh
+        # f2: Condition at short circuit (V=0)
         f2 = Isc - Iph + Io * (np.exp(Isc * Rs / (a * Ns * Vt)) - 1) + Isc * Rs / Rsh
+        # f3: Condition at maximum power point
         f3 = (
             Impp
             - Iph
             + Io * (np.exp((Vmpp + Impp * Rs) / (a * Ns * Vt)) - 1)
             + (Vmpp + Impp * Rs) / Rsh
         )
+        # f4: Derivative of current with respect to voltage should be zero at maximum power point
         f4 = Rs / Rsh - Io / (a * Ns * Vt) * (np.exp(Isc * Rs / (a * Ns * Vt))) * (
             Rsh - Rs
         )
+        # f5: Derivative of power with respect to voltage should be zero at maximum power point
+        f5 = Impp - (Vmpp - Impp * Rs) * (
+            Io / (a * Ns * Vt) * (np.exp((Vmpp + Impp * Rs) / (a * Ns * Vt))) + 1 / Rsh
+        )
+
+        return [f1, f2, f3, f4, f5]
+
+    def backcalculate_equations(self, vars):
+        """
+        Define the system of equations to back calculate the original parameters.
+
+        Parameters:
+        vars (tuple): A tuple containing the variables of the system.
+
+        Returns:
+        list: A list of equations.
+        """
+        Voc, Isc, Vmpp, Impp, Ns = vars
+        Iph = self.Iph
+        Io = self.Io
+        a = self.a
+        Rs = self.Rs
+        Rsh = self.Rsh
+        Vt = self.Vt
+
+        # Define the equations
+        # f1: Condition at open circuit (I=0)
+        f1 = Iph - Io * (np.exp(Voc / (a * Ns * Vt)) - 1) - Voc / Rsh
+        # f2: Condition at short circuit (V=0)
+        f2 = Isc - Iph + Io * (np.exp(Isc * Rs / (a * Ns * Vt)) - 1) + Isc * Rs / Rsh
+        # f3: Condition at maximum power point
+        f3 = (
+            Impp
+            - Iph
+            + Io * (np.exp((Vmpp + Impp * Rs) / (a * Ns * Vt)) - 1)
+            + (Vmpp + Impp * Rs) / Rsh
+        )
+        # f4: Derivative of current with respect to voltage should be zero at maximum power point
+        f4 = Rs / Rsh - Io / (a * Ns * Vt) * (np.exp(Isc * Rs / (a * Ns * Vt))) * (
+            Rsh - Rs
+        )
+        # f5: Derivative of power with respect to voltage should be zero at maximum power point
         f5 = Impp - (Vmpp - Impp * Rs) * (
             Io / (a * Ns * Vt) * (np.exp((Vmpp + Impp * Rs) / (a * Ns * Vt))) + 1 / Rsh
         )
@@ -183,6 +232,12 @@ class pv_model:
         # Solve the system of equations
         Iph, Io, a, Rs, Rsh = fsolve(self.equations, (Iph_0, Io_0, a_0, Rs_0, Rsh_0))
 
+        # Plug the solutions back into the equations
+        residuals = self.equations((Iph, Io, a, Rs, Rsh))
+
+        # Print the residuals
+        print(f"Residuals: {residuals}")
+
         # Assign the solutions to the instance variables
         self.Iph = Iph
         self.Io = Io
@@ -190,7 +245,59 @@ class pv_model:
         self.Rs = Rs
         self.Rsh = Rsh
 
-    def pv_current(self, V, I_0=0):
+        # Back calculate the input parameters
+        self.backcalculate_params()
+
+    def backcalculate_params(self):
+        """
+        Back calculate the original parameters of the photovoltaic model.
+
+        If not all inputs are set, print a message and return.
+        """
+        if not self.check_inputs():
+            print("Some inputs are not set.")
+            return
+
+        # Initial guesses for the parameters
+        Voc_0 = self.Voc
+        Isc_0 = self.Isc
+        Vmpp_0 = self.Vmpp
+        Impp_0 = self.Impp
+        Ns_0 = self.Ns
+
+        # Solve the system of equations
+        self.Voc_bc, self.Isc_bc, self.Vmpp_bc, self.Impp_bc, self.Ns_bc = fsolve(
+            self.backcalculate_equations, (Voc_0, Isc_0, Vmpp_0, Impp_0, Ns_0)
+        )
+
+        # Print the back-calculated parameters
+        print(f"Back-calculated Voc: {self.Voc_bc}")
+        print(f"Back-calculated Isc: {self.Isc_bc}")
+        print(f"Back-calculated Vmpp: {self.Vmpp_bc}")
+        print(f"Back-calculated Impp: {self.Impp_bc}")
+        print(f"Back-calculated Ns: {self.Ns_bc}")
+
+        # Print the original parameters
+        print(f"Original Voc: {self.Voc}")
+        print(f"Original Isc: {self.Isc}")
+        print(f"Original Vmpp: {self.Vmpp}")
+        print(f"Original Impp: {self.Impp}")
+        print(f"Original Ns: {self.Ns}")
+
+        # Calculate and print the error
+        error_Voc = abs((self.Voc_bc - self.Voc) / self.Voc)
+        error_Isc = abs((self.Isc_bc - self.Isc) / self.Isc)
+        error_Vmpp = abs((self.Vmpp_bc - self.Vmpp) / self.Vmpp)
+        error_Impp = abs((self.Impp_bc - self.Impp) / self.Impp)
+        error_Ns = abs((self.Ns_bc - self.Ns) / self.Ns)
+
+        print(f"Error in Voc: {error_Voc}")
+        print(f"Error in Isc: {error_Isc}")
+        print(f"Error in Vmpp: {error_Vmpp}")
+        print(f"Error in Impp: {error_Impp}")
+        print(f"Error in Ns: {error_Ns}")
+
+    def pv_current(self, V, I_0=0, explicit=False):
         """
         Calculate the current of the photovoltaic model.
 
@@ -202,17 +309,136 @@ class pv_model:
         float: The current.
         """
 
-        def current_eqn(I):
-            return (
-                self.Iph
-                - self.Io
-                * (np.exp((V + I * self.Rs) / (self.a * self.Ns * self.Vt)) - 1)
-                - I
+        if explicit:
+            lambertw_arg = (
+                (self.Rs * self.Io * self.Rsh)
+                / ((self.a * self.Ns * self.Vt) * (self.Rs + self.Rsh))
+                * np.exp(
+                    (self.Rsh * (self.Rs * self.Iph + self.Rs * self.Io + V))
+                    / (self.a * self.Ns * self.Vt * (self.Rs + self.Rsh))
+                )
             )
+            I = (
+                -V / (self.Rs + self.Rsh)
+                - lambertw(lambertw_arg) * (self.a * self.Ns * self.Vt) / self.Rs
+                + self.Rsh * (self.Io + self.Iph) / (self.Rs + self.Rsh)
+            )
+            return np.real(I)
 
-        # Solve the equation for the current
-        I = fsolve(current_eqn, I_0)
-        return I
+        else:
+
+            def current_eqn(I):
+                return (
+                    self.Iph
+                    - self.Io
+                    * (np.exp((V + I * self.Rs) / (self.a * self.Ns * self.Vt)) - 1)
+                    - ((V + I * self.Rs) / self.Rsh)
+                    - I
+                )
+
+            # # Clamp the current to 0 at Voc
+            # # or look at ways to fix the fsolve to return much smaller currents
+            # # as it currently caps at 12mA for Voc
+            # if V >= self.Voc_bc:
+            #     I = 0
+            #     I = np.array([I], np.float64)
+            #     return I
+
+            # Solve the equation for the current
+            # I = fsolve(current_eqn, I_0)
+            I = brentq(current_eqn, 0, self.Isc_bc)
+            return I
+
+    def pv_current_RL(self, R_L, I_0=0, explicit=False):
+        """
+        Calculate the current of the photovoltaic model.
+
+        Parameters:
+        R_L (float): The load resistance.
+        I_0 (float): The initial guess for the current. Default is 0.
+
+        Returns:
+        float: The current.
+        """
+
+        if explicit:
+
+            def current_eqn(I):
+                V = I * R_L
+                lambertw_arg = (
+                    (self.Rs * self.Io * self.Rsh)
+                    / ((self.a * self.Ns * self.Vt) * (self.Rs + self.Rsh))
+                    * np.exp(
+                        (self.Rsh * (self.Rs * self.Iph + self.Rs * self.Io + V))
+                        / (self.a * self.Ns * self.Vt * (self.Rs + self.Rsh))
+                    )
+                )
+                if lambertw_arg == np.inf:
+                    lambertw_approx = (
+                        np.log(
+                            (self.Rs * self.Io * self.Rsh)
+                            / ((self.a * self.Ns * self.Vt) * (self.Rs + self.Rsh))
+                        )
+                        + (
+                            (self.Rsh * (self.Rs * self.Iph + self.Rs * self.Io + V))
+                            / (self.a * self.Ns * self.Vt * (self.Rs + self.Rsh))
+                        )
+                        - np.log(
+                            np.log(
+                                (self.Rs * self.Io * self.Rsh)
+                                / ((self.a * self.Ns * self.Vt) * (self.Rs + self.Rsh))
+                            )
+                            + (
+                                (
+                                    self.Rsh
+                                    * (self.Rs * self.Iph + self.Rs * self.Io + V)
+                                )
+                                / (self.a * self.Ns * self.Vt * (self.Rs + self.Rsh))
+                            )
+                        )
+                    )
+                    return (
+                        -V / (self.Rs + self.Rsh)
+                        - lambertw_approx * (self.a * self.Ns * self.Vt) / self.Rs
+                        + self.Rsh * (self.Io + self.Iph) / (self.Rs + self.Rsh)
+                        - I
+                    )
+                else:
+                    return (
+                        -V / (self.Rs + self.Rsh)
+                        - lambertw(lambertw_arg)
+                        * (self.a * self.Ns * self.Vt)
+                        / self.Rs
+                        + self.Rsh * (self.Io + self.Iph) / (self.Rs + self.Rsh)
+                        - I
+                    )
+
+            I = brentq(current_eqn, 0, self.Isc_bc)
+            return I
+        else:
+
+            def current_eqn(I):
+                V = I * R_L  # Calculate the voltage across the load
+                V = np.clip(V, 0, self.Voc_bc)  # Clamp V within [0, Voc]
+
+                return (
+                    self.Iph
+                    - self.Io
+                    * (np.exp((V + I * self.Rs) / (self.a * self.Ns * self.Vt)) - 1)
+                    - ((V + I * self.Rs) / self.Rsh)
+                    - I
+                )
+
+            # Solve the equation for the current
+            # I = fsolve(current_eqn, I_0)
+            I = brentq(current_eqn, 0, self.Isc_bc)
+
+            # if I * R_L >= self.Voc_bc:
+            #     I = self.Voc / R_L
+            #     I = np.array([I], np.float64)
+            #     return I
+
+            return I
 
     def pv_current_derivative(self, V):
         """
@@ -283,9 +509,88 @@ class pv_model:
         P = V * I
         return P
 
+    def pv_voltage(self, I, V_0=0, explicit=False):
+        """
+        Calculate the voltage of the photovoltaic model.
+
+        Parameters:
+        I (float): The current.
+        V_0 (float): The initial guess for the voltage. Default is 0.
+
+        Returns:
+        float: The current.
+        """
+
+        if explicit:
+            lambertw_arg = (
+                self.Io
+                * self.Rsh
+                / (self.a * self.Ns * self.Vt)
+                * np.exp(
+                    (self.Rsh * (-I + self.Iph + self.Io))
+                    / (self.a * self.Ns * self.Vt)
+                )
+            )
+            V = (
+                -I * self.Rs
+                - I * self.Rsh
+                + self.Iph * self.Rsh
+                - self.a * self.Ns * self.Vt * lambertw(lambertw_arg)
+                + self.Io * self.Rsh
+            )
+
+            if lambertw_arg == np.inf:
+                # https://math.stackexchange.com/questions/3432288/avoid-arithmetic-overflow-when-calculating-lambertwexpx
+                lambertw_approx = (
+                    np.log(self.Io * self.Rsh / (self.a * self.Ns * self.Vt))
+                    + (self.Rsh * (-I + self.Iph + self.Io))
+                    / (self.a * self.Ns * self.Vt)
+                    - np.log(
+                        np.log(self.Io * self.Rsh / (self.a * self.Ns * self.Vt))
+                        + (self.Rsh * (-I + self.Iph + self.Io))
+                        / (self.a * self.Ns * self.Vt)
+                    )
+                )
+                V = (
+                    -I * self.Rs
+                    - I * self.Rsh
+                    + self.Iph * self.Rsh
+                    - self.a * self.Ns * self.Vt * (lambertw_approx)
+                    + self.Io * self.Rsh
+                )
+
+            return np.real(V)
+        else:
+
+            I = np.clip(I, 0, self.Isc)
+
+            def voltage_eqn(V):
+                # V = np.clip(V, 0, self.Voc_bc)  # Clamp V within [0, Voc]
+
+                return (
+                    self.Iph
+                    - self.Io
+                    * (np.exp((V + I * self.Rs) / (self.a * self.Ns * self.Vt)) - 1)
+                    - ((V + I * self.Rs) / self.Rsh)
+                    - I
+                )
+
+            # # Clamp the current to 0 at Voc
+            # # or look at ways to fix the fsolve to return much smaller currents
+            # # as it currently caps at 12mA for Voc
+            # if V >= self.Voc_bc:
+            #     I = 0
+            #     I = np.array([I], np.float64)
+            #     return I
+
+            # Solve the equation for the current
+            # V = fsolve(voltage_eqn, V_0)
+            V = brentq(voltage_eqn, 0, self.Voc)
+            return V
+
     def example(self):
         """
-        Set the inputs to example values, calculate the parameters, and plot the results.
+        Set the inputs to example values, and calculate the parameters.
         """
         self._Isc = 7.36
         self._Voc = 30.4
@@ -300,18 +605,21 @@ class pv_model:
         print(f"Rs: {self.Rs}")
         print(f"Rsh: {self.Rsh}")
 
-        self.plot()  # Call the plot method
+        print(f"I(V=Voc)={self.pv_current(self.Voc)}")
+        print(f"I(V=Voc)={self.pv_current(self.Voc_bc)}")
+        # print(f"V(I=Isc)={self.pv_current(self.Voc)}")
+        # print(f"V(I=Isc)={self.pv_current(self.Voc_bc)}")
 
-    def plot(self):
+    def plot(self, explicit=False):
         """
-        Plot the V-I curve, V-P curve, V-dI/dV curve, and V-dP/dV curve of the photovoltaic model.
+        Plot the V-I curve, V-P curve, V-dI/dV curve, V-dP/dV curve, and R-V curve of the photovoltaic model.
         """
 
         # Generate a range of voltage values
         V = np.linspace(0, self.Voc, 500)
 
         # Calculate the corresponding current values
-        I = np.array([self.pv_current(v) for v in V])
+        I = np.array([self.pv_current(v, explicit=explicit) for v in V])
 
         # Calculate power values
         P = np.array([self.pv_power(v) for v in V])
@@ -320,8 +628,23 @@ class pv_model:
         dI = np.array([self.pv_current_derivative(v) for v in V])
         dP = np.array([self.pv_power_derivative(v) for v in V])
 
+        # Generate a range of load resistance values
+        R_L = np.logspace(-6, 6, 100)  # Avoid division by zero
+
+        # Calculate the corresponding current values for the load resistance
+        I_RL = np.array([self.pv_current_RL(r, 7, explicit=True) for r in R_L])
+
+        # Calculate voltage values for the load resistance
+        V_RL = np.squeeze(I_RL) * R_L  # Ohm's law
+        # print("I_RL:")
+        # print(I_RL)
+        # print("V_RL:")
+        # print(V_RL)
+        # print("R_L:")
+        # print(R_L)
+
         # Create the subplots
-        fig, axs = plt.subplots(4, figsize=(10, 24), sharex=True)
+        fig, axs = plt.subplots(5, figsize=(10, 30), sharex=True)
 
         # Plot V-I curve
         axs[0].plot(V, I, label="V-I curve")
@@ -351,6 +674,14 @@ class pv_model:
         axs[3].legend()
         axs[3].grid(True)
 
+        # Plot R-V curve
+        axs[4].plot(V_RL, R_L, label="V-R curve")
+        axs[4].set_xlabel("Voltage (V)")
+        axs[4].set_ylabel("Resistance (R_L)")
+        axs[4].legend()
+        axs[4].grid(True)
+        axs[4].set_yscale("log", base=10)
+
         # Add a linked cursor
         cursor = mplcursors.cursor(axs, hover=True)
 
@@ -364,7 +695,7 @@ class pv_model:
         fig.suptitle("PV Curves")
 
         # Display the plot
-        plt.show()
+        plt.show(block=False)
 
     def benchmark(self):
         func1 = lambda: self.pv_current(0)
@@ -374,4 +705,39 @@ class pv_model:
 
 model = pv_model()
 model.example()
-model.benchmark()
+model.plot()
+model.plot(explicit=True)
+plt.show()
+
+# # model.benchmark()
+# print(f"model.pv_current(model.Voc): {model.pv_current(model.Voc)}")
+# print(f"model.pv_current(0): {model.pv_current(0)}")
+# print(f"model.pv_current(model.Voc_bc): {model.pv_current(model.Voc_bc)}")
+# print(
+#     f"model.pv_current_explicit(model.Voc): {model.pv_current_explicit(model.Voc, explicit=True)}"
+# )
+# print(f"model.pv_current_explicit(0): {model.pv_current_explicit(0, explicit=True)}")
+# print(
+#     f"model.pv_current_explicit(model.Voc_bc): {model.pv_current_explicit(model.Voc_bc, explicit=True)}"
+# )
+# print(model.Isc_bc)
+
+# print(f"asdf: {model.pv_current(model.Voc + 1)}")
+
+# print(f"voltage (I=7): {model.pv_voltage(7)}")
+# print(f"voltage (I=8): {model.pv_voltage(8)}")
+# print(f"voltage (I=1): {model.pv_voltage(1)}")
+# print(f"voltage (I=0.5): {model.pv_voltage(0.5)}")
+# print(f"voltage (I=0.1): {model.pv_voltage(0.1)}")
+# print(f"voltage (I=0): {model.pv_voltage(0.001)}")
+# print(f"current (V=0.001): {model.pv_current(model.pv_voltage(0.001))}")
+
+# print(f"voltage_explicit (I=7): {model.pv_voltage(7, explicit=True)}")
+# print(f"voltage_explicit (I=8): {model.pv_voltage(8, explicit=True)}")
+# print(f"voltage_explicit (I=1): {model.pv_voltage(1, explicit=True)}")
+# print(f"voltage_explicit (I=0.5): {model.pv_voltage(0.5, explicit=True)}")
+# print(f"voltage_explicit (I=0.1): {model.pv_voltage(0.1, explicit=True)}")
+# print(f"voltage_explicit (I=0): {model.pv_voltage(0.001, explicit=True)}")
+# print(
+#     f"current_explicit (V=0.001): {model.pv_current(model.pv_voltage(0.001, explicit=True), explicit=True)}"
+# )
