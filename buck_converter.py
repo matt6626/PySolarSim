@@ -154,27 +154,6 @@ class buck_converter:
 
         return saw, pwm_counter, pulse_count, vpwm
 
-    def type1_with_dc_gain_controller(
-        self,
-        t0,
-        PA,
-        Vin,
-        Vref,
-        vc0,
-        Rg,
-        Rf,
-        Cf,
-        Vsupply_neg=-np.Inf,
-        Vsupply_pos=np.Inf,
-    ):
-        ic = (Vref - Vin) / Rg
-        vc = ((ic / Cf) * PA) + vc0
-        vo = np.clip(vc + (Rf * ic) + Vref, Vsupply_neg, Vsupply_pos)
-        # recalculate feedback capacitor voltage after controller output saturates
-        vc = vo - (ic * Rf) - Vref
-        t = t0 + PA
-        return t, ic, vc, vo
-
     def comparator(self, input, reference):
         output = 0
         if input > reference:
@@ -269,109 +248,92 @@ class buck_converter:
         simulation_sample_time = 0
         while simulation_sample_time + 1 < simulation_sample_length:
             simulation_sample_time += 1
-            simulation_time[simulation_sample_time] = (
-                simulation_time[simulation_sample_time - 1] + Ts
-            )
+
+            # simulation sample time naming convention
+            curr = simulation_sample_time
+            prev = simulation_sample_time - 1
+
+            simulation_time[curr] = simulation_time[prev] + Ts
+            dt = Ts
 
             if pwm_duty_cycle is None:
-                # controller simulation
-                (
-                    discard_time,
-                    discard_icf,
-                    vcf[simulation_sample_time],
-                    vcontrol[simulation_sample_time],
-                ) = self.type1_with_dc_gain_controller(
-                    simulation_time[simulation_sample_time],
-                    Ts,
-                    vo[simulation_sample_time - 1],
-                    vref[simulation_sample_time],
-                    vcf[simulation_sample_time - 1],
-                    self.Rg,
-                    self.Rf,
-                    self.Cf,
-                    0,
-                    1,
-                )
+                vcontrol[curr] = self.controller.simulate(vref[prev], vo[prev], dt)
 
                 (
-                    saw[simulation_sample_time],
-                    pwm_counter[simulation_sample_time],
-                    pulse_count[simulation_sample_time],
-                    pwm_value[simulation_sample_time],
+                    saw[curr],
+                    pwm_counter[curr],
+                    pulse_count[curr],
+                    pwm_value[curr],
                 ) = self.pulse_skipping_pwm_generator(
-                    vcontrol[simulation_sample_time],
-                    saw[simulation_sample_time - 1],
-                    pwm_counter[simulation_sample_time - 1],
-                    pulse_count[simulation_sample_time - 1],
+                    vcontrol[curr],
+                    saw[prev],
+                    pwm_counter[prev],
+                    pulse_count[prev],
                     1,
                     pwm_frequency,
                     pwm_Nskip,
                     Ts,
                 )
-                # pwm_value[simulation_sample_time] = self.comparator(
-                #     vcontrol[simulation_sample_time],
-                #     sawtooth_value[simulation_sample_time],
+                # pwm_value[curr] = self.comparator(
+                #     vcontrol[curr],
+                #     sawtooth_value[curr],
                 # )
 
             # Output current limiting
-            # if io[simulation_sample_time - 1] > output_current_limit:
-            #     pwm_value[simulation_sample_time] = 0
+            # if io[prev] > output_current_limit:
+            #     pwm_value[curr] = 0
 
             # # Output voltage limiting
-            # if vo[simulation_sample_time - 1] > output_voltage_limit:
-            #     pwm_value[simulation_sample_time] = 0
+            # if vo[prev] > output_voltage_limit:
+            #     pwm_value[curr] = 0
 
-            if pwm_value[simulation_sample_time]:
+            if pwm_value[curr]:
                 # On state
                 (
                     discard,
-                    il[simulation_sample_time],
-                    ic[simulation_sample_time],
-                    vc[simulation_sample_time],
-                    vo[simulation_sample_time],
-                    vl[simulation_sample_time],
+                    il[curr],
+                    ic[curr],
+                    vc[curr],
+                    vo[curr],
+                    vl[curr],
                 ) = self.on_state(
-                    simulation_time[simulation_sample_time],
+                    simulation_time[curr],
                     PA,
-                    vin[simulation_sample_time],
+                    vin[curr],
                     Rsource,
-                    il[simulation_sample_time - 1],
+                    il[prev],
                     Lesr,
                     L,
-                    vc[simulation_sample_time - 1],
+                    vc[prev],
                     Cesr,
                     C,
-                    Rload[simulation_sample_time],
+                    Rload[curr],
                 )
             else:
                 # Off state
                 (
                     discard,
-                    il[simulation_sample_time],
-                    ic[simulation_sample_time],
-                    vc[simulation_sample_time],
-                    vo[simulation_sample_time],
-                    vl[simulation_sample_time],
+                    il[curr],
+                    ic[curr],
+                    vc[curr],
+                    vo[curr],
+                    vl[curr],
                 ) = self.off_state(
-                    simulation_time[simulation_sample_time],
+                    simulation_time[curr],
                     PA,
                     Vdiode,
                     Rdiode,
-                    il[simulation_sample_time - 1],
+                    il[prev],
                     Lesr,
                     L,
-                    vc[simulation_sample_time - 1],
+                    vc[prev],
                     Cesr,
                     C,
-                    Rload[simulation_sample_time],
+                    Rload[curr],
                 )
 
-            io[simulation_sample_time] = (
-                vo[simulation_sample_time] / Rload[simulation_sample_time]
-            )
-            verr[simulation_sample_time] = (
-                vref[simulation_sample_time] - vo[simulation_sample_time]
-            )
+            io[curr] = vo[curr] / Rload[curr]
+            verr[curr] = vref[curr] - vo[curr]
 
         # Plot simulation
         import matplotlib.pyplot as plt
