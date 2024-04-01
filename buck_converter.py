@@ -144,14 +144,12 @@ class buck_converter:
         pwm_latch = pwm_latch0
         # clock pwm - first clock will be at t=0 + Tpwm
         if (saw0 + saw_increment) > saw_amp:
-            pwm_latch = 0
-            vpwm = 0
+            # pwm_latch = 0
+            if vcontrol > saw:
+                vpwm = 1
 
-        if vcontrol > saw0:
-            vpwm = 1
-            # pwm_latch = 1
-        # else:
-        # vpwm = 0
+        if vcontrol < saw:
+            vpwm = 0
 
         pwm_counter = pwm_counter0
         pulse_count = pulse_count0
