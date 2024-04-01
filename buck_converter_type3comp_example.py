@@ -5,7 +5,7 @@ import voltage_mode_controller as vmc
 
 fs = 2e6
 Ts = 1 / fs
-simulation_length_seconds = 0.05
+simulation_length_seconds = 0.01
 
 simulation_sample_length = int(simulation_length_seconds / Ts)
 
@@ -29,8 +29,8 @@ analog_type3_controller_control_func_params = {
     "v_c2": 0,
     "v_c3": 0,
     "r1": 100e3,
-    "r2": 5e3,
-    "r3": 5e3,
+    "r2": 100e3,
+    "r3": 100e3,
     "r4": 2.04e3,
     "c1": 1e-9,
     "c2": 10e-9,
