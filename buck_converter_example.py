@@ -28,7 +28,9 @@ buck = bc.buck_converter(
     Rf=1e3,
     Cf=470e-9,
 )
-buck.simulate(fs, simulation_length_seconds, input_voltage, Vref=vref)
+buck.simulate(
+    fs, simulation_length_seconds, input_voltage Vref=vref
+)
 
 
 plt.show()

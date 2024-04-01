@@ -1,4 +1,5 @@
 import numpy as np
+import voltage_mode_controller as vmc
 
 class buck_converter:
 
@@ -15,6 +16,7 @@ class buck_converter:
         Rg=10e3,
         Rf=1e3,
         Cf=470e-9,
+        controller=vmc.voltage_mode_controller(),
     ) -> None:
         self.L = L
         self.Lesr = Lesr
@@ -27,6 +29,7 @@ class buck_converter:
         self.Rg = Rg
         self.Rf = Rf
         self.Cf = Cf
+        self.controller = controller
 
     def on_state(self, t0, PA, Vin, Rs, il0, Rl, L, vc0, ESR, C, R):
         K1 = C + ESR * C / R
@@ -36,8 +39,9 @@ class buck_converter:
         il = Vin * PA / L + il0 * (1 + KA * PA) + vc0 * (KB * PA)
         ic = C * (vc - vc0) / PA
         vo = ESR * ic + vc
+        vl = L * (il - il0) / PA
         t = t0 + PA
-        return t, il, ic, vc, vo
+        return t, il, ic, vc, vo, vl
 
     def off_state(self, t0, PA, Vd, Rd, il0, Rl, L, vc0, ESR, C, R):
         K1 = C + ESR * C / R
@@ -47,8 +51,9 @@ class buck_converter:
         il = -Vd * PA / L + il0 * (1 + KA * PA) + vc0 * (KB * PA)
         ic = C * (vc - vc0) / PA
         vo = ESR * ic + vc
+        vl = L * (il - il0) / PA
         t = t0 + PA
-        return t, il, ic, vc, vo
+        return t, il, ic, vc, vo, vl
 
     def PWM_generator(self, P, DC, Ts, TAM):
         import numpy as np
@@ -56,6 +61,9 @@ class buck_converter:
         PA = Ts
         PWM = np.zeros(TAM)
         t = np.zeros(TAM)
+        if DC == 1:
+            PWM = np.ones(TAM)
+            return t, PWM
         time = 0
         t0 = 0
         i = 0
@@ -113,7 +121,40 @@ class buck_converter:
             i += 1
         return t, signal
 
-    def controller(
+    def pulse_skipping_pwm_generator(
+        self,
+        vcontrol,
+        saw0,
+        pwm_counter0,
+        pulse_count0,
+        saw_amp,
+        Fpwm,
+        Nskip,
+        Ts,
+    ):
+        Tpwm = 1 / Fpwm
+        saw_increment = Ts / Tpwm * saw_amp
+        saw = (saw0 + saw_increment) % saw_amp
+
+        if vcontrol > saw:
+            vpwm = 1
+        else:
+            vpwm = 0
+
+        pwm_counter = pwm_counter0
+        pulse_count = pulse_count0
+        if pwm_counter == 0 and Nskip != 0:
+            # mod Nskip for more meaningful plots of pulse_count
+            pulse_count = (pulse_count + 1) % Nskip
+        pwm_counter = int((pwm_counter + 1) % (Tpwm / Ts))
+
+        if Nskip != 0 and pulse_count != 0:
+            # skip pulses
+            vpwm = 0
+
+        return saw, pwm_counter, pulse_count, vpwm
+
+    def type1_with_dc_gain_controller(
         self,
         t0,
         PA,
@@ -142,7 +183,18 @@ class buck_converter:
             output = 0
         return output
 
-    def simulate(self, fs, sim_length_seconds, Vin, pwm_duty_cycle=None, Vref=0):
+    def simulate(
+        self,
+        fs,
+        sim_length_seconds,
+        Vin,
+        pwm_frequency=10e3,
+        pwm_Nskip=0,
+        pwm_duty_cycle=None,
+        Vref=0,
+        output_current_limit=np.Inf,
+        output_voltage_limit=np.Inf,
+    ):
         Ts = 1 / fs
         PA = Ts
 
@@ -154,13 +206,15 @@ class buck_converter:
         C = self.C
         Cesr = self.Cesr
         Rsource = self.Rsource
-        Rload = self.Rload
+        if len(self.Rload) == simulation_sample_length:
+            Rload = self.Rload
+        else:
+            Rload = [self.Rload] * simulation_sample_length
         Vdiode = self.Vdiode
         Rdiode = self.Rdiode
 
         if pwm_duty_cycle is not None:
             # Fixed PWM generation
-            pwm_frequency = 10e3
             pwm_period = 1 / pwm_frequency
             pwm_time, pwm_value = self.PWM_generator(
                 pwm_period, pwm_duty_cycle, Ts, simulation_sample_length
@@ -168,7 +222,6 @@ class buck_converter:
         else:
             pwm_value = [0] * simulation_sample_length
             # Fixed sawtooth generation
-            pwm_frequency = 10e3
             pwm_period = 1 / pwm_frequency
             sawtooth_time, sawtooth_value = self.saw_tooth_generator(
                 1, pwm_period, Ts, simulation_sample_length
@@ -183,6 +236,8 @@ class buck_converter:
         ic = [0] * simulation_sample_length
         vc = [vc0] * simulation_sample_length
         vo = [0] * simulation_sample_length
+        io = [0] * simulation_sample_length
+        vl = [0] * simulation_sample_length
         if len(Vin) == simulation_sample_length:
             vin = Vin
         else:
@@ -191,12 +246,21 @@ class buck_converter:
         if pwm_duty_cycle is None:
             vcontrol0 = 0
             vcontrol = [vcontrol0] * simulation_sample_length
-            if len(Vref) == simulation_sample_length:
-                vref = Vref
-            else:
-                vref = [Vref] * simulation_sample_length
             vcf0 = 0
             vcf = [vcf0] * simulation_sample_length
+        if len(Vref) == simulation_sample_length:
+            vref = Vref
+        else:
+            vref = [Vref] * simulation_sample_length
+        # Pulse skipping PWM generator variables
+        saw0 = 0
+        saw = [saw0] * simulation_sample_length
+        pwm_counter0 = 0
+        pwm_counter = [pwm_counter0] * simulation_sample_length
+        pulse_count0 = 0
+        pulse_count = [pulse_count0] * simulation_sample_length
+        # vpwm0 = 0
+        # vpwm = [vpwm0] * simulation_sample_length
         # Extra Variables
         verr = [vref[0] - vo[0]] * simulation_sample_length
         # Simulation time
@@ -216,7 +280,7 @@ class buck_converter:
                     discard_icf,
                     vcf[simulation_sample_time],
                     vcontrol[simulation_sample_time],
-                ) = self.controller(
+                ) = self.type1_with_dc_gain_controller(
                     simulation_time[simulation_sample_time],
                     Ts,
                     vo[simulation_sample_time - 1],
@@ -226,13 +290,36 @@ class buck_converter:
                     self.Rf,
                     self.Cf,
                     0,
-                    5,
+                    1,
                 )
 
-                pwm_value[simulation_sample_time] = self.comparator(
+                (
+                    saw[simulation_sample_time],
+                    pwm_counter[simulation_sample_time],
+                    pulse_count[simulation_sample_time],
+                    pwm_value[simulation_sample_time],
+                ) = self.pulse_skipping_pwm_generator(
                     vcontrol[simulation_sample_time],
-                    sawtooth_value[simulation_sample_time],
+                    saw[simulation_sample_time - 1],
+                    pwm_counter[simulation_sample_time - 1],
+                    pulse_count[simulation_sample_time - 1],
+                    1,
+                    pwm_frequency,
+                    pwm_Nskip,
+                    Ts,
                 )
+                # pwm_value[simulation_sample_time] = self.comparator(
+                #     vcontrol[simulation_sample_time],
+                #     sawtooth_value[simulation_sample_time],
+                # )
+
+            # Output current limiting
+            # if io[simulation_sample_time - 1] > output_current_limit:
+            #     pwm_value[simulation_sample_time] = 0
+
+            # # Output voltage limiting
+            # if vo[simulation_sample_time - 1] > output_voltage_limit:
+            #     pwm_value[simulation_sample_time] = 0
 
             if pwm_value[simulation_sample_time]:
                 # On state
@@ -242,6 +329,7 @@ class buck_converter:
                     ic[simulation_sample_time],
                     vc[simulation_sample_time],
                     vo[simulation_sample_time],
+                    vl[simulation_sample_time],
                 ) = self.on_state(
                     simulation_time[simulation_sample_time],
                     PA,
@@ -253,7 +341,7 @@ class buck_converter:
                     vc[simulation_sample_time - 1],
                     Cesr,
                     C,
-                    Rload,
+                    Rload[simulation_sample_time],
                 )
             else:
                 # Off state
@@ -263,6 +351,7 @@ class buck_converter:
                     ic[simulation_sample_time],
                     vc[simulation_sample_time],
                     vo[simulation_sample_time],
+                    vl[simulation_sample_time],
                 ) = self.off_state(
                     simulation_time[simulation_sample_time],
                     PA,
@@ -274,9 +363,12 @@ class buck_converter:
                     vc[simulation_sample_time - 1],
                     Cesr,
                     C,
-                    Rload,
+                    Rload[simulation_sample_time],
                 )
 
+            io[simulation_sample_time] = (
+                vo[simulation_sample_time] / Rload[simulation_sample_time]
+            )
             verr[simulation_sample_time] = (
                 vref[simulation_sample_time] - vo[simulation_sample_time]
             )
@@ -286,54 +378,104 @@ class buck_converter:
         import mplcursors
 
         # Create the subplots
-        if pwm_duty_cycle is not None:
-            fig, axs = plt.subplots(4, figsize=(10, 30), sharex=True)
-        else:
-            fig, axs = plt.subplots(4, figsize=(10, 30), sharex=True)
+        fig, axs = plt.subplots(10, figsize=(10, 30), sharex=True)
 
+        i = 0
         # Plot Input Voltage
-        axs[0].plot(simulation_time, vin, label="vin")
-        axs[0].set_xlabel("time (s)")
-        axs[0].set_ylabel("vin (V)")
-        axs[0].legend()
-        axs[0].grid(True)
+        axs[i].plot(simulation_time, vin, label="vin")
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("vin (V)")
+        axs[i].legend()
+        axs[i].grid(True)
 
+        i += 1
+        # Plot inductor current
+        axs[i].plot(simulation_time, il, label="il")
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("il (A)")
+        axs[i].legend()
+        axs[i].grid(True)
+
+        i += 1
+        # Plot inductor voltage
+        axs[i].plot(simulation_time, vl, label="vl")
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("vl (V)")
+        axs[i].legend()
+        axs[i].grid(True)
+
+        i += 1
+        # Plot capacitor voltage
+        axs[i].plot(simulation_time, vc, label="vc")
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("vc (V)")
+        axs[i].legend()
+        axs[i].grid(True)
+
+        i += 1
         # Plot Reference Voltage
-        if pwm_duty_cycle is None:
-            axs[1].plot(simulation_time, vref, label="vref")
-        axs[1].set_xlabel("time (s)")
-        axs[1].set_ylabel("vref (V)")
-        axs[1].legend()
-        axs[1].grid(True)
+        axs[i].plot(simulation_time, vref, label="vref")
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("vref (V)")
+        axs[i].legend()
+        axs[i].grid(True)
 
         # Plot Output Voltage
-        axs[1].plot(simulation_time, vo, label="vout")
-        axs[1].set_xlabel("time (s)")
-        axs[1].set_ylabel("vout (V)")
-        axs[1].legend()
-        axs[1].grid(True)
+        axs[i].plot(simulation_time, vo, label="vout")
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("vout (V)")
+        axs[i].legend()
+        axs[i].grid(True)
 
+        i += 1
+        # Plot Output Current
+        axs[i].plot(simulation_time, io, label="iout")
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("iout (A)")
+        axs[i].legend()
+        axs[i].grid(True)
+
+        i += 1
+        # Plot Rload
+        axs[i].plot(simulation_time, Rload, label="rload")
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("rload (ohms)")
+        axs[i].legend()
+        axs[i].grid(True)
+
+        i += 1
         # Plot Error Voltage
-        axs[2].plot(simulation_time, verr, label="verr")
-        axs[2].set_xlabel("time (s)")
-        axs[2].set_ylabel("verr (V)")
-        axs[2].legend()
-        axs[2].grid(True)
+        axs[i].plot(simulation_time, verr, label="verr")
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("verr (V)")
+        axs[i].legend()
+        axs[i].grid(True)
 
+        i += 1
+        # PWM generation internals
+        axs[i].plot(simulation_time, saw, label="saw")
+        # axs[i].plot(simulation_time, pwm_counter, label="pwm_counter")
+        axs[i].plot(simulation_time, pulse_count, label="pulse_count")
+        axs[i].set_xlabel("time (s)")
+        # axs[i].set_ylabel("verr (V)")
+        axs[i].legend()
+        axs[i].grid(True)
+
+        i += 1
         # Plot Control Voltage
         if pwm_duty_cycle is None:
-            axs[3].plot(simulation_time, vcontrol, label="vcontrol")
-            axs[3].plot(simulation_time, vcf, label="vcf")
+            axs[i].plot(simulation_time, vcontrol, label="vcontrol")
+            # axs[i].plot(simulation_time, pwm_value, label="pwm")
         else:
-            axs[3].plot(
+            axs[i].plot(
                 simulation_time,
-                [pwm_duty_cycle] * simulation_sample_length,
+                pwm_value,
                 label="vcontrol",
             )
-        axs[3].set_xlabel("time (s)")
-        axs[3].set_ylabel("vcontrol (V)")
-        axs[3].legend()
-        axs[3].grid(True)
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("vcontrol (V)")
+        axs[i].legend()
+        axs[i].grid(True)
 
         # # Plot Inductor Current
         # axs[1].plot(simulation_time, il, label="iL")
@@ -384,23 +526,3 @@ class buck_converter:
 
         # Display the plot
         plt.show(block=False)
-
-
-# fs = 1e6
-# Ts = 1 / fs
-# simulation_length_seconds = 1
-
-# simulation_sample_length = int(simulation_length_seconds / Ts)
-
-# input_voltage = []
-# input_voltage.extend([20] * 250000)
-# input_voltage.extend([10] * 750000)
-# vref = []
-# vref.extend([10] * 500000)
-# vref.extend([5] * 500000)
-
-# buck = buck_converter()
-# buck.simulate(fs, simulation_length_seconds, input_voltage, Vref=vref)
-# import matplotlib.pyplot as plt
-
-# plt.show()
