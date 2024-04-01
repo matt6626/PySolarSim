@@ -171,6 +171,7 @@ class buck_converter:
         pwm_Nskip=0,
         pwm_duty_cycle=None,
         Vref=0,
+        vref_gain=1,
         output_current_limit=np.Inf,
         output_voltage_limit=np.Inf,
     ):
@@ -228,9 +229,9 @@ class buck_converter:
             vcf0 = 0
             vcf = [vcf0] * simulation_sample_length
         if len(Vref) == simulation_sample_length:
-            vref = Vref
+            vref = [x * vref_gain for x in Vref]
         else:
-            vref = [Vref] * simulation_sample_length
+            vref = [Vref * vref_gain] * simulation_sample_length
         # Pulse skipping PWM generator variables
         saw0 = 0
         saw = [saw0] * simulation_sample_length
@@ -376,7 +377,7 @@ class buck_converter:
 
         i += 1
         # Plot Reference Voltage
-        axs[i].plot(simulation_time, vref, label="vref")
+        axs[i].plot(simulation_time, [x / vref_gain for x in vref], label="vref")
         axs[i].set_xlabel("time (s)")
         axs[i].set_ylabel("vref (V)")
         axs[i].legend()
