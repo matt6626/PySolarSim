@@ -334,7 +334,7 @@ class buck_converter:
                 )
 
             io[curr] = vo[curr] / Rload[curr]
-            verr[curr] = vref[curr] - vo[curr]
+            verr[curr] = vref[curr] / vref_gain - vo[curr]
 
         # Plot simulation
         import matplotlib.pyplot as plt
