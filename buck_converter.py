@@ -125,6 +125,7 @@ class buck_converter:
         self,
         vcontrol,
         saw0,
+        pwm0,
         pwm_counter0,
         pulse_count0,
         saw_amp,
@@ -133,13 +134,18 @@ class buck_converter:
         Ts,
     ):
         Tpwm = 1 / Fpwm
+
+        vpwm = pwm0
+
         saw_increment = Ts / Tpwm * saw_amp
         saw = (saw0 + saw_increment) % saw_amp
 
-        if vcontrol > saw:
-            vpwm = 1
-        else:
-            vpwm = 0
+        # clock pwm - first clock will be at t=0 + Tpwm
+        if (saw0 + saw_increment) > saw_amp:
+            if vcontrol > saw0:
+                vpwm = 1
+            else:
+                vpwm = 0
 
         pwm_counter = pwm_counter0
         pulse_count = pulse_count0
@@ -268,6 +274,7 @@ class buck_converter:
                 ) = self.pulse_skipping_pwm_generator(
                     vcontrol[curr],
                     saw[prev],
+                    pwm_value[prev],
                     pwm_counter[prev],
                     pulse_count[prev],
                     1,
@@ -341,7 +348,7 @@ class buck_converter:
         import mplcursors
 
         # Create the subplots
-        fig, axs = plt.subplots(10, figsize=(10, 30), sharex=True)
+        fig, axs = plt.subplots(11, figsize=(10, 30), sharex=True)
 
         i = 0
         # Plot Input Voltage
@@ -430,13 +437,16 @@ class buck_converter:
             axs[i].plot(simulation_time, vcontrol, label="vcontrol")
             # axs[i].plot(simulation_time, pwm_value, label="pwm")
         else:
-            axs[i].plot(
-                simulation_time,
-                pwm_value,
-                label="vcontrol",
-            )
+            axs[i].plot(simulation_time, pwm_value, label="vcontrol")
         axs[i].set_xlabel("time (s)")
         axs[i].set_ylabel("vcontrol (V)")
+        axs[i].legend()
+        axs[i].grid(True)
+
+        i += 1
+        axs[i].plot(simulation_time, pwm_value, label="vpwm")
+        axs[i].set_xlabel("time (s)")
+        axs[i].set_ylabel("vpwm (V)")
         axs[i].legend()
         axs[i].grid(True)
 
