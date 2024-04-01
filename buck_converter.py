@@ -126,6 +126,7 @@ class buck_converter:
         vcontrol,
         saw0,
         pwm0,
+        pwm_latch0,
         pwm_counter0,
         pulse_count0,
         saw_amp,
@@ -140,12 +141,16 @@ class buck_converter:
         saw_increment = Ts / Tpwm * saw_amp
         saw = (saw0 + saw_increment) % saw_amp
 
+        pwm_latch = pwm_latch0
         # clock pwm - first clock will be at t=0 + Tpwm
         if (saw0 + saw_increment) > saw_amp:
-            if vcontrol > saw0:
-                vpwm = 1
-            else:
-                vpwm = 0
+            pwm_latch = 0
+
+        if vcontrol > saw0:
+            vpwm = 1
+            pwm_latch = 1
+        else:
+            vpwm = 0
 
         pwm_counter = pwm_counter0
         pulse_count = pulse_count0
@@ -158,7 +163,7 @@ class buck_converter:
             # skip pulses
             vpwm = 0
 
-        return saw, pwm_counter, pulse_count, vpwm
+        return saw, pwm_counter, pulse_count, vpwm, pwm_latch
 
     def comparator(self, input, reference):
         output = 0
@@ -245,6 +250,8 @@ class buck_converter:
         pwm_counter = [pwm_counter0] * simulation_sample_length
         pulse_count0 = 0
         pulse_count = [pulse_count0] * simulation_sample_length
+        pwm_latch0 = 0
+        pwm_latch = [pwm_latch0] * simulation_sample_length
         # vpwm0 = 0
         # vpwm = [vpwm0] * simulation_sample_length
         # Extra Variables
@@ -271,10 +278,12 @@ class buck_converter:
                     pwm_counter[curr],
                     pulse_count[curr],
                     pwm_value[curr],
+                    pwm_latch[curr],
                 ) = self.pulse_skipping_pwm_generator(
                     vcontrol[curr],
                     saw[prev],
                     pwm_value[prev],
+                    pwm_latch[prev],
                     pwm_counter[prev],
                     pulse_count[prev],
                     1,
