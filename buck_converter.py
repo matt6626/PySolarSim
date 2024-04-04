@@ -271,7 +271,7 @@ class buck_converter:
 
             if pwm_duty_cycle is None:
                 vcontrol[curr] = self.controller.simulate(
-                    vref[prev], vo[prev], dt, plot=True
+                    vref[prev], vo[prev], dt, plot=False
                 )
 
                 (

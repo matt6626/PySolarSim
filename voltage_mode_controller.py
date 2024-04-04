@@ -216,13 +216,12 @@ def analog_type3_compensator_control_func(vref, vout, dt, param={}):
     v_c3 = v_control - vref
     i_c3 = param["c3"] * (v_c3 - param["v_c3"]) / dt
     i_c1 = i_zi + vref / param["r4"] - i_c3
+    v_in_neg = v_control - v_c3
 
     # opamp saturation
     # if saturation occurred, calculate the true voltage at the inverting terminal, and recalculate circuit voltages/currents as result
     # should be able to always perform this calculation
     if v_control == param["vsupply_neg"] or v_control == param["vsupply_pos"]:
-        # print("saturation occurred")
-
         # Saturation equations
 
         # equation relating Zf and Zi:
@@ -505,20 +504,23 @@ def analog_type3_compensator_control_func(vref, vout, dt, param={}):
         i_c3 = param["c3"] * (v_c3 - param["v_c3"]) / dt
         i_c2 = param["c2"] * (v_c2 - param["v_c2"]) / dt
         i_c1 = param["c1"] * (v_c1 - param["v_c1"]) / dt
-        print(f"v_in_neg: {v_in_neg}")
 
     # recalculate v_c1 due to v_control saturation
     # v_c1 = v_control - vref - i_c1 * param["r2"]
-
-    print(f"vout: {vout}")
-    print(f"vref: {vref}")
-    print(f"v_control: {v_control}")
-    print(f"v_c1: {v_c1}")
-    print(f"v_c2: {v_c2}")
-    print(f"v_c3: {v_c3}")
-    print(f"i_c3: {i_c3}")
-    print(f"i_c1: {i_c1}")
-    print()
+    debug_state_variables = False
+    if debug_state_variables:
+        if v_control == param["vsupply_neg"] or v_control == param["vsupply_pos"]:
+            print("saturation occurred")
+        print(f"v_in_neg: {v_in_neg}")
+        print(f"vout: {vout}")
+        print(f"vref: {vref}")
+        print(f"v_control: {v_control}")
+        print(f"v_c1: {v_c1}")
+        print(f"v_c2: {v_c2}")
+        print(f"v_c3: {v_c3}")
+        print(f"i_c3: {i_c3}")
+        print(f"i_c1: {i_c1}")
+        print()
 
     # assign new values to memory
     param["v_c1"] = v_c1
