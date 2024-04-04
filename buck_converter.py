@@ -16,6 +16,9 @@ class buck_converter:
         Rg=10e3,
         Rf=1e3,
         Cf=470e-9,
+        output_current_limit=np.Inf,
+        inductor_current_limit=np.Inf,
+        synchronous=False,
         controller=vmc.voltage_mode_controller(),
     ) -> None:
         self.L = L
@@ -29,6 +32,9 @@ class buck_converter:
         self.Rg = Rg
         self.Rf = Rf
         self.Cf = Cf
+        self.output_current_limit = output_current_limit
+        self.inductor_current_limit = inductor_current_limit
+        self.synchronous = synchronous
         self.controller = controller
 
     def on_state(self, t0, PA, Vin, Rs, il0, Rl, L, vc0, ESR, C, R):
@@ -53,6 +59,15 @@ class buck_converter:
         vo = ESR * ic + vc
         vl = L * (il - il0) / PA
         t = t0 + PA
+
+        # model the freewheeling diode state for non-synchronous buck converters
+        if not self.synchronous:
+            # dcm occurs if il < 0 in off state
+            if il < 0:
+                il = 0
+            vl = L * (il - il0) / PA
+            # vc, vo, and il are unaffected by dcm
+
         return t, il, ic, vc, vo, vl
 
     def PWM_generator(self, P, DC, Ts, TAM):
@@ -270,9 +285,25 @@ class buck_converter:
             dt = Ts
 
             if pwm_duty_cycle is None:
+                # controller
                 vcontrol[curr] = self.controller.simulate(
                     vref[prev], vo[prev], dt, plot=False
                 )
+
+                # TODO: should integrate the current limiting into the controller
+                # TODO: combine many controllers into single controller would be nice
+                if abs(il[prev]) > abs(self.inductor_current_limit):
+                    vcontrol[curr] = 0
+                if abs(io[prev]) > abs(self.output_current_limit):
+                    vcontrol[curr] = 0
+
+                # TODO: better pulse skipping modes
+                if False:  # self.simple_pulse_skipping_mode:
+                    # very simple pulse skipping mode method which could cause issues depending on buck converter parameters
+                    if vo[prev] > 0.2 * vref[prev] and vo[prev] < 0.8 * vref[prev]:
+                        vcontrol[curr] = 0
+
+                # pwm generation
 
                 (
                     saw[curr],
