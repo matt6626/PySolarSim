@@ -28,6 +28,7 @@ analog_type3_controller_control_func_params = {
     "v_c1": 0,
     "v_c2": 0,
     "v_c3": 0,
+    "v_control": 0,
     "r1": 100e3,
     "r2": 100e3,
     "r3": 100e3,
@@ -66,7 +67,7 @@ buck.simulate(
     vref_gain=(1 / input_voltage_amplitude),
     # pwm_duty_cycle=1,
     pwm_frequency=20e3,
-    pwm_Nskip=0,
+    pwm_Nskip=2,
     output_current_limit=5,
     output_voltage_limit=50,
 )

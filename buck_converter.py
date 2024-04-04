@@ -270,7 +270,9 @@ class buck_converter:
             dt = Ts
 
             if pwm_duty_cycle is None:
-                vcontrol[curr] = self.controller.simulate(vref[prev], vo[prev], dt)
+                vcontrol[curr] = self.controller.simulate(
+                    vref[prev], vo[prev], dt, plot=True
+                )
 
                 (
                     saw[curr],
@@ -351,159 +353,162 @@ class buck_converter:
             io[curr] = vo[curr] / Rload[curr]
             verr[curr] = vref[curr] / vref_gain - vo[curr]
 
-        # Plot simulation
-        import matplotlib.pyplot as plt
-        import mplcursors
+        if True:
+            # Plot simulation
+            import matplotlib.pyplot as plt
+            import mplcursors
 
-        # Create the subplots
-        fig, axs = plt.subplots(11, figsize=(10, 30), sharex=True)
+            plt.ioff()
 
-        i = 0
-        # Plot Input Voltage
-        axs[i].plot(simulation_time, vin, label="vin")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("vin (V)")
-        axs[i].legend()
-        axs[i].grid(True)
+            # Create the subplots
+            fig, axs = plt.subplots(11, figsize=(10, 30), sharex=True)
 
-        i += 1
-        # Plot inductor current
-        axs[i].plot(simulation_time, il, label="il")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("il (A)")
-        axs[i].legend()
-        axs[i].grid(True)
+            i = 0
+            # Plot Input Voltage
+            axs[i].plot(simulation_time, vin, label="vin")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("vin (V)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        i += 1
-        # Plot inductor voltage
-        axs[i].plot(simulation_time, vl, label="vl")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("vl (V)")
-        axs[i].legend()
-        axs[i].grid(True)
+            i += 1
+            # Plot inductor current
+            axs[i].plot(simulation_time, il, label="il")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("il (A)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        i += 1
-        # Plot capacitor voltage
-        axs[i].plot(simulation_time, vc, label="vc")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("vc (V)")
-        axs[i].legend()
-        axs[i].grid(True)
+            i += 1
+            # Plot inductor voltage
+            axs[i].plot(simulation_time, vl, label="vl")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("vl (V)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        i += 1
-        # Plot Reference Voltage
-        axs[i].plot(simulation_time, [x / vref_gain for x in vref], label="vref")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("vref (V)")
-        axs[i].legend()
-        axs[i].grid(True)
+            i += 1
+            # Plot capacitor voltage
+            axs[i].plot(simulation_time, vc, label="vc")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("vc (V)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        # Plot Output Voltage
-        axs[i].plot(simulation_time, vo, label="vout")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("vout (V)")
-        axs[i].legend()
-        axs[i].grid(True)
+            i += 1
+            # Plot Reference Voltage
+            axs[i].plot(simulation_time, [x / vref_gain for x in vref], label="vref")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("vref (V)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        i += 1
-        # Plot Output Current
-        axs[i].plot(simulation_time, io, label="iout")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("iout (A)")
-        axs[i].legend()
-        axs[i].grid(True)
+            # Plot Output Voltage
+            axs[i].plot(simulation_time, vo, label="vout")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("vout (V)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        i += 1
-        # Plot Rload
-        axs[i].plot(simulation_time, Rload, label="rload")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("rload (ohms)")
-        axs[i].legend()
-        axs[i].grid(True)
+            i += 1
+            # Plot Output Current
+            axs[i].plot(simulation_time, io, label="iout")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("iout (A)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        i += 1
-        # Plot Error Voltage
-        axs[i].plot(simulation_time, verr, label="verr")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("verr (V)")
-        axs[i].legend()
-        axs[i].grid(True)
+            i += 1
+            # Plot Rload
+            axs[i].plot(simulation_time, Rload, label="rload")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("rload (ohms)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        i += 1
-        # PWM generation internals
-        axs[i].plot(simulation_time, saw, label="saw")
-        # axs[i].plot(simulation_time, pwm_counter, label="pwm_counter")
-        axs[i].plot(simulation_time, pulse_count, label="pulse_count")
-        axs[i].set_xlabel("time (s)")
-        # axs[i].set_ylabel("verr (V)")
-        axs[i].legend()
-        axs[i].grid(True)
+            i += 1
+            # Plot Error Voltage
+            axs[i].plot(simulation_time, verr, label="verr")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("verr (V)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        i += 1
-        # Plot Control Voltage
-        if pwm_duty_cycle is None:
-            axs[i].plot(simulation_time, vcontrol, label="vcontrol")
-            # axs[i].plot(simulation_time, pwm_value, label="pwm")
-        else:
-            axs[i].plot(simulation_time, pwm_value, label="vcontrol")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("vcontrol (V)")
-        axs[i].legend()
-        axs[i].grid(True)
+            i += 1
+            # PWM generation internals
+            axs[i].plot(simulation_time, saw, label="saw")
+            # axs[i].plot(simulation_time, pwm_counter, label="pwm_counter")
+            axs[i].plot(simulation_time, pulse_count, label="pulse_count")
+            axs[i].set_xlabel("time (s)")
+            # axs[i].set_ylabel("verr (V)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        i += 1
-        axs[i].plot(simulation_time, pwm_value, label="vpwm")
-        axs[i].set_xlabel("time (s)")
-        axs[i].set_ylabel("vpwm (V)")
-        axs[i].legend()
-        axs[i].grid(True)
+            i += 1
+            # Plot Control Voltage
+            if pwm_duty_cycle is None:
+                axs[i].plot(simulation_time, vcontrol, label="vcontrol")
+                # axs[i].plot(simulation_time, pwm_value, label="pwm")
+            else:
+                axs[i].plot(simulation_time, pwm_value, label="vcontrol")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("vcontrol (V)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        # # Plot Inductor Current
-        # axs[1].plot(simulation_time, il, label="iL")
-        # axs[1].set_xlabel("time (s)")
-        # axs[1].set_ylabel("iL (A)")
-        # axs[1].legend()
-        # axs[1].grid(True)
+            i += 1
+            axs[i].plot(simulation_time, pwm_value, label="vpwm")
+            axs[i].set_xlabel("time (s)")
+            axs[i].set_ylabel("vpwm (V)")
+            axs[i].legend()
+            axs[i].grid(True)
 
-        # # Plot Capacitor Current
-        # axs[2].plot(simulation_time, ic, label="ic")
-        # axs[2].set_xlabel("time (s)")
-        # axs[2].set_ylabel("ic (A)")
-        # axs[2].legend()
-        # axs[2].grid(True)
+            # # Plot Inductor Current
+            # axs[1].plot(simulation_time, il, label="iL")
+            # axs[1].set_xlabel("time (s)")
+            # axs[1].set_ylabel("iL (A)")
+            # axs[1].legend()
+            # axs[1].grid(True)
 
-        # # Plot Capacitor Voltage
-        # axs[3].plot(simulation_time, vc, label="vc")
-        # axs[3].set_xlabel("time (s)")
-        # axs[3].set_ylabel("vc")
-        # axs[3].legend()
-        # axs[3].grid(True)
+            # # Plot Capacitor Current
+            # axs[2].plot(simulation_time, ic, label="ic")
+            # axs[2].set_xlabel("time (s)")
+            # axs[2].set_ylabel("ic (A)")
+            # axs[2].legend()
+            # axs[2].grid(True)
 
-        # # Plot Output Voltage
-        # axs[4].plot(simulation_time, vo, label="vo")
-        # axs[4].set_xlabel("time (s)")
-        # axs[4].set_ylabel("vo")
-        # axs[4].legend()
-        # axs[4].grid(True)
+            # # Plot Capacitor Voltage
+            # axs[3].plot(simulation_time, vc, label="vc")
+            # axs[3].set_xlabel("time (s)")
+            # axs[3].set_ylabel("vc")
+            # axs[3].legend()
+            # axs[3].grid(True)
 
-        # # Plot PWM
-        # axs[5].plot(simulation_time, pwm_value, label="pwm")
-        # axs[5].set_xlabel("time (s)")
-        # axs[5].set_ylabel("pwm")
-        # axs[5].legend()
-        # axs[5].grid(True)
+            # # Plot Output Voltage
+            # axs[4].plot(simulation_time, vo, label="vo")
+            # axs[4].set_xlabel("time (s)")
+            # axs[4].set_ylabel("vo")
+            # axs[4].legend()
+            # axs[4].grid(True)
 
-        # Add a linked cursor
-        cursor = mplcursors.cursor(axs, hover=True)
+            # # Plot PWM
+            # axs[5].plot(simulation_time, pwm_value, label="pwm")
+            # axs[5].set_xlabel("time (s)")
+            # axs[5].set_ylabel("pwm")
+            # axs[5].legend()
+            # axs[5].grid(True)
 
-        # Define the annotation for the cursor
-        @cursor.connect("add")
-        def on_add(sel):
-            x, y = sel.target
-            sel.annotation.set_text(f"x: {x:.2f}\ny: {y:.2f}")
+            # Add a linked cursor
+            cursor = mplcursors.cursor(axs, hover=True)
 
-        # Add a title to the figure
-        fig.suptitle("Buck Converter Simulation")
+            # Define the annotation for the cursor
+            @cursor.connect("add")
+            def on_add(sel):
+                x, y = sel.target
+                sel.annotation.set_text(f"x: {x:.2f}\ny: {y:.2f}")
 
-        # Display the plot
-        plt.show(block=False)
+            # Add a title to the figure
+            fig.suptitle("Buck Converter Simulation")
+
+            # Display the plot
+            plt.show(block=False)
