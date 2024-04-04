@@ -18,6 +18,9 @@ input_voltage.extend([input_voltage_amplitude] * simulation_sample_length)
 
 vref = []
 vref.extend([5] * int(simulation_sample_length))
+from filters import rc_filter
+
+vref = rc_filter(vref, 1e3, 1e-6, 0, Ts)
 
 # rload = [10e6] * simulation_sample_length
 rload = np.logspace(-3, 7, num=simulation_sample_length)
