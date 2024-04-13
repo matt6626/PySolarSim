@@ -13,9 +13,6 @@ class buck_converter:
         Rload=1,
         Vdiode=0.6,
         Rdiode=0,
-        Rg=10e3,
-        Rf=1e3,
-        Cf=470e-9,
         output_current_limit=np.Inf,
         inductor_current_limit=np.Inf,
         synchronous=False,
@@ -29,9 +26,6 @@ class buck_converter:
         self.Rload = Rload
         self.Vdiode = Vdiode
         self.Rdiode = Rdiode
-        self.Rg = Rg
-        self.Rf = Rf
-        self.Cf = Cf
         self.output_current_limit = output_current_limit
         self.inductor_current_limit = inductor_current_limit
         self.synchronous = synchronous
@@ -186,6 +180,24 @@ class buck_converter:
         else:
             output = 0
         return output
+
+    def analyse(self, bode_plant=True):
+        import matplotlib.pyplot as plt
+        import mplcursors
+
+        L = self.L
+        RL = self.Lesr
+        C = self.C
+        RC = self.Cesr
+        RS = self.Rsource
+        RLOAD = self.Rload
+        VD = self.Vdiode
+        RD = self.Rdiode
+
+        if bode_plant:
+            foo = 1
+
+        return True
 
     def simulate(
         self,

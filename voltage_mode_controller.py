@@ -12,7 +12,8 @@ class voltage_mode_controller:
         if self.simulation_not_started:
             # TODO: try not to run this before control_func is called so that optional parameters don't break things
             # default dict makes more sense!!!! then above suggestion
-            self.plot(vref, vout, dt, self.control_func_params, init=True)
+            if plot:
+                self.plot(vref, vout, dt, self.control_func_params, init=True)
             self.simulation_not_started = False
         vcontrol = self.control_func(vref, vout, dt, self.control_func_params)
         if plot:
