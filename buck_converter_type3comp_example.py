@@ -54,9 +54,6 @@ buck = bc.buck_converter(
     Rload=rload,
     Vdiode=0.6,
     Rdiode=0,
-    Rg=100e3,
-    Rf=0,
-    Cf=470e-9,
     controller=analog_type3_controller,
 )
 buck.simulate(

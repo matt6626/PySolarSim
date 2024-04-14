@@ -1,5 +1,6 @@
 import numpy as np
 import voltage_mode_controller as vmc
+import bode_plot as bp
 
 class buck_converter:
 
@@ -181,27 +182,65 @@ class buck_converter:
             output = 0
         return output
 
-    def analyse(self, bode_plant=True):
+    def analyse(self, RLOAD, bode_plant=True):
         import bode_plot as bp
+
+        """ TODO: because the converter parameters can be array (so that time varying parameters can be used in simulation), there should be some check to ensure none of the parameters are time varying, OR, need to just grab the first element of something. """
 
         L = self.L
         RL = self.Lesr
         C = self.C
         RC = self.Cesr
         RS = self.Rsource
-        RLOAD = self.Rload
+        # RLOAD = self.Rload
         VD = self.Vdiode
         RD = self.Rdiode
 
         if bode_plant:
-            foo = 1
-
             # Zout (s):
             # 1. |Zc| = 1/wC
             # 2. |Zl| = wL
             # 3. f0 = 1 / (2*pi * sqrt(L*C))
             # 4. Q = R / R0
             # 5. R0 = sqrt(L / C)
+
+            # Simplified buck converter to start with
+
+            # vo / d
+            # 1. No approximation, ZPK (zero, pole, gain) transfer function
+            # Approach 1: Factor denominator
+            # G(s) = K / [1 + a1*s + a2*s^2]
+            # G(s) = K / [(1 - s/s1) * (1 - s/s2)]
+            # s1 = -a1 / (2a2) * [1 - sqrt(1 - 4a2/[a1^2])]
+            # s2 = -a1 / (2a2) * [1 + sqrt(1 - 4a2/[a1^2])]
+
+            # for buck converter we get:
+            # a1 = L/R, a2 = L*C
+            a1 = L / RLOAD
+            a2 = L * C
+            print(a1)
+            print(a2)
+
+            # Check 4a2 <= a1^2, proceed, else, roots are complex (section 8.1.1 of fundamental of power electronics assumption is violated)
+            if 4 * a2 > a1**2:
+                # raise Exception(
+                #     f"Error constructing transfer function, 4a2 > a1^2: {4*a2} > {a1**2}"
+                # )
+                # Complex roots
+                s1 = -a1 / (2 * a2) * (1 - np.lib.scimath.sqrt(1 - 4 * a2 / (a1**2)))
+                s2 = -a1 / (2 * a2) * (1 + np.lib.scimath.sqrt(1 - 4 * a2 / (a1**2)))
+            else:
+                s1 = -a1 / (2 * a2) * (1 - np.sqrt(1 - 4 * a2 / (a1**2)))
+                s2 = -a1 / (2 * a2) * (1 + np.sqrt(1 - 4 * a2 / (a1**2)))
+            print(f"s1: {s1}")
+            print(f"s2: {s2}")
+
+            f1 = -s1 / (2 * np.pi)
+            f2 = -s2 / (2 * np.pi)
+            bode = bp.bode_plot_zpk(1, f_poles=[f1, f2])
+            bode.plot(0.1, 10e6)
+
+            pass
 
         return True
 

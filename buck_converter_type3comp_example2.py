@@ -63,14 +63,12 @@ buck = bc.buck_converter(
     Rload=rload,
     Vdiode=0.6,
     Rdiode=0,
-    Rg=100e3,
-    Rf=0,
-    Cf=470e-9,
     output_current_limit=5,
     inductor_current_limit=5,
     synchronous=True,
     controller=analog_type3_controller,
 )
+buck.analyse(RLOAD=10e6, bode_plant=True)
 buck.simulate(
     fs,
     simulation_length_seconds,
