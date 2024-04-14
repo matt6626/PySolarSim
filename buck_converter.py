@@ -182,8 +182,7 @@ class buck_converter:
         return output
 
     def analyse(self, bode_plant=True):
-        import matplotlib.pyplot as plt
-        import mplcursors
+        import bode_plot as bp
 
         L = self.L
         RL = self.Lesr
@@ -196,6 +195,13 @@ class buck_converter:
 
         if bode_plant:
             foo = 1
+
+            # Zout (s):
+            # 1. |Zc| = 1/wC
+            # 2. |Zl| = wL
+            # 3. f0 = 1 / (2*pi * sqrt(L*C))
+            # 4. Q = R / R0
+            # 5. R0 = sqrt(L / C)
 
         return True
 
