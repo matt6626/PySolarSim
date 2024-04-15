@@ -43,10 +43,21 @@ class bode_plot_zpk:
         tf_phase_deg.append(plot_data(phase_deg, "DC Phase"))
 
         # Zeroes
+        f_zeroes = self.f_zeroes
+        # TODO: handle origin zeroes
+        for i, f_zero in enumerate(f_zeroes):
+            if f_zero == 0:
+                g_jw = f * 1j
+                mag = np.abs(g_jw)
+                db = 20 * np.log10(mag)
+                tf_mag_db.append(plot_data(db, f"Zero (f = {0} Hz)"))
+                phase_deg = np.rad2deg(np.angle(g_jw))
+                tf_phase_deg.append(plot_data(phase_deg, f"Zero (f = {0} Hz)"))
+                f_zeroes.pop(i)
+
         # G = (1 + j*f/f0)
         # |G| = sqrt([1]^2 + (f/f0)^2)
         # |G|_db = 20 * log10(|G|)
-        f_zeroes = self.f_zeroes
         for f_zero in f_zeroes:
             f_mag = np.abs(f_zero)
             g_jw = 1 + (f / f_zero) * 1j
@@ -57,11 +68,23 @@ class bode_plot_zpk:
             tf_phase_deg.append(plot_data(phase_deg, f"Zero (f = {f_mag} Hz)"))
 
         # Poles
-        # G = (1 - j*f/f0) / [1 + (f/f0)^2]
-        # |G| = sqrt([1/(1 + [f/f0]^2)]^2 + [(-f/f0)/)(1+[f/f0]^2)]^2)
+        f_poles = self.f_poles
+        # TODO: handle origin poles
+        for i, f_pole in enumerate(f_poles):
+            print(f_pole)
+            if f_pole == 0:
+                g_jw = 1 / (f * 1j)
+                mag = np.abs(g_jw)
+                db = 20 * np.log10(mag)
+                tf_mag_db.append(plot_data(db, f"Pole (f = {0} Hz)"))
+                phase_deg = np.rad2deg(np.angle(g_jw))
+                tf_phase_deg.append(plot_data(phase_deg, f"Pole (f = {0} Hz)"))
+                f_poles.pop(i)
+
+        # G = 1 / (1 + j*f/f0)
+        # |G| = 1 / sqrt([1]^2 + (f/f0)^2)
         # TODO: revert this to zero form and just flip
         # |G|_db = 20 * log10(|G|)
-        f_poles = self.f_poles
         for f_pole in f_poles:
             f_mag = np.abs(f_pole)
             g_jw = 1 / (1 + (f / f_pole) * 1j)
@@ -202,10 +225,10 @@ class bode_plot_zpk:
             phase_ax.grid()
         return fig
 
-    def example(self):
+    def example1(self):
         # To run example use:
         # bp = bode_plot_zpk()
-        # bp.example()
+        # bp.example1()
         self.G0 = 40
         self.f_poles = [100, 2000]
 
@@ -213,3 +236,20 @@ class bode_plot_zpk:
         plt.show()
 
         return
+
+    def example2(self):
+        # To run example use:
+        # bp = bode_plot_zpk()
+        # bp.example2()
+        self.G0 = 1
+        self.f_zeroes = [0]
+        self.f_poles = [0, 0]
+
+        fig = self.plot(1, 10e3)
+        plt.show()
+
+        return
+
+
+bp = bode_plot_zpk()
+bp.example2()
