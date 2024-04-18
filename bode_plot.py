@@ -43,9 +43,11 @@ class bode_plot_zpk:
         tf_phase_deg.append(plot_data(phase_deg, "DC Phase"))
 
         # Zeroes
-        f_zeroes = self.f_zeroes
-        # TODO: handle origin zeroes
-        for i, f_zero in enumerate(f_zeroes):
+        f_zeroes = [zero for zero in self.f_zeroes if zero != 0]
+        f_origin_zeros = [zero for zero in self.f_zeroes if zero == 0]
+
+        # handle origin zeroes
+        for i, f_zero in enumerate(f_origin_zeros):
             if f_zero == 0:
                 g_jw = f * 1j
                 mag = np.abs(g_jw)
@@ -53,7 +55,6 @@ class bode_plot_zpk:
                 tf_mag_db.append(plot_data(db, f"Zero (f = {0} Hz)"))
                 phase_deg = np.rad2deg(np.angle(g_jw))
                 tf_phase_deg.append(plot_data(phase_deg, f"Zero (f = {0} Hz)"))
-                f_zeroes.pop(i)
 
         # G = (1 + j*f/f0)
         # |G| = sqrt([1]^2 + (f/f0)^2)
@@ -68,18 +69,17 @@ class bode_plot_zpk:
             tf_phase_deg.append(plot_data(phase_deg, f"Zero (f = {f_mag} Hz)"))
 
         # Poles
-        f_poles = self.f_poles
-        # TODO: handle origin poles
-        for i, f_pole in enumerate(f_poles):
-            print(f_pole)
-            if f_pole == 0:
-                g_jw = 1 / (f * 1j)
-                mag = np.abs(g_jw)
-                db = 20 * np.log10(mag)
-                tf_mag_db.append(plot_data(db, f"Pole (f = {0} Hz)"))
-                phase_deg = np.rad2deg(np.angle(g_jw))
-                tf_phase_deg.append(plot_data(phase_deg, f"Pole (f = {0} Hz)"))
-                f_poles.pop(i)
+        f_poles = [pole for pole in self.f_poles if pole != 0]
+        f_origin_poles = [pole for pole in self.f_poles if pole == 0]
+
+        # handle origin poles
+        for i, f_pole in enumerate(f_origin_poles):
+            g_jw = 1 / (f * 1j)
+            mag = np.abs(g_jw)
+            db = 20 * np.log10(mag)
+            tf_mag_db.append(plot_data(db, f"Pole (f = {0} Hz)"))
+            phase_deg = np.rad2deg(np.angle(g_jw))
+            tf_phase_deg.append(plot_data(phase_deg, f"Pole (f = {0} Hz)"))
 
         # G = 1 / (1 + j*f/f0)
         # |G| = 1 / sqrt([1]^2 + (f/f0)^2)
@@ -249,7 +249,3 @@ class bode_plot_zpk:
         plt.show()
 
         return
-
-
-bp = bode_plot_zpk()
-bp.example2()
