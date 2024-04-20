@@ -30,28 +30,18 @@ rload = rload[::-1]
 # https://view.officeapps.live.com/op/view.aspx?src=https%3A%2F%2Fassets.maxlinear.com%2Fweb%2Fdocuments%2Fsipex%2Fapplicationnotes%2Fanp-16_typeiiicalculator_101206.xls&wdOrigin=BROWSELINK
 # fc = 2 kHz
 # fsw = 20 kHz
-analog_type3_controller_control_func_params = {
-    "v_c1": 0,
-    "v_c2": 0,
-    "v_c3": 0,
-    "v_control": 0,
-    "r1": 8.2e3,
-    "r2": 22e3,
-    "r3": 4.7e3,
-    "r4": 10e12,  # o/c
-    "c1": 15e-9,
-    "c2": 12e-9,
-    "c3": 100e-12,
-    "vsupply_neg": 0,  # -np.Inf,
-    "vsupply_pos": 5,  # np.Inf,
-    "open_loop_gain": 10e6,
-}
-
 vref_gain = 1
-
-analog_type3_controller = vmc.voltage_mode_controller(
-    analog_type3_controller_control_func_params,
-    vmc.analog_type3_compensator_control_func,
+analog_type3_controller = vmc.analog_type3_compensator_controller(
+    r1=8.2e3,
+    r2=22e3,
+    r3=4.7e3,
+    r4=10e12,
+    c1=15e-9,
+    c2=12e-9,
+    c3=100e-12,
+    vsupply_neg=0,
+    vsupply_pos=5,
+    open_loop_gain=10e6,
 )
 
 buck = bc.buck_converter(
@@ -74,12 +64,10 @@ buck.simulate(
     simulation_length_seconds,
     input_voltage,
     Vref=vref,
-    vref_gain=1,
+    vref_gain=vref_gain,
     # pwm_duty_cycle=1,
     pwm_frequency=100e3,
     pwm_Nskip=0,
-    output_current_limit=5,
-    output_voltage_limit=50,
 )
 
 plt.show()

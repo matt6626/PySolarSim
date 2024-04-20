@@ -15,6 +15,7 @@ class buck_converter:
         Vdiode=0.6,
         Rdiode=0,
         output_current_limit=np.Inf,
+        output_voltage_limit=np.Inf,
         inductor_current_limit=np.Inf,
         synchronous=False,
         controller=vmc.voltage_mode_controller(),
@@ -182,7 +183,7 @@ class buck_converter:
             output = 0
         return output
 
-    def analyse(self, RLOAD, bode_plant=True):
+    def analyse(self, RLOAD, bode_plant=True, bode_compensator=True):
         import bode_plot as bp
 
         """ TODO: because the converter parameters can be array (so that time varying parameters can be used in simulation), there should be some check to ensure none of the parameters are time varying, OR, need to just grab the first element of something. """
@@ -242,6 +243,9 @@ class buck_converter:
 
             pass
 
+        if bode_compensator:
+            pass
+
         return True
 
     def simulate(
@@ -254,8 +258,6 @@ class buck_converter:
         pwm_duty_cycle=None,
         Vref=0,
         vref_gain=1,
-        output_current_limit=np.Inf,
-        output_voltage_limit=np.Inf,
     ):
         Ts = 1 / fs
         PA = Ts
@@ -268,7 +270,10 @@ class buck_converter:
         C = self.C
         Cesr = self.Cesr
         Rsource = self.Rsource
-        if len(self.Rload) == simulation_sample_length:
+        if (
+            isinstance(self.Rload, (list, np.ndarray))
+            and len(self.Rload) == simulation_sample_length
+        ):
             Rload = self.Rload
         else:
             Rload = [self.Rload] * simulation_sample_length

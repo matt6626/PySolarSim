@@ -19,33 +19,23 @@ vref.extend([25] * int(simulation_sample_length))
 rload = np.logspace(-3, 7, num=simulation_sample_length)
 rload = rload[::-1]
 
-analog_type1_with_dc_gain_controller_control_func_params = {
-    "v_cf": 0,
-    "rg": 100e3,
-    "rf": 0,
-    "cf": 470e-9,
-    "vsupply_neg": 0,
-    "vsupply_pos": 1,
-}
-
-analog_type1_with_dc_gain_controller = vmc.voltage_mode_controller(
-    analog_type1_with_dc_gain_controller_control_func_params,
-    vmc.analog_type1_with_dc_gain_controller_control_func,
+type1_compensator = vmc.analog_type_1_with_dc_gain_controller(
+    rg=10e3, rf=1e3, cf=470e-9, vsupply_neg=0, vsupply_pos=1
 )
 
 buck = bc.buck_converter(
-    L=10e-6,
+    L=200e-6,
     Lesr=0.1,
-    C=1000e-6,
-    Cesr=0.1,
+    C=220e-6,
+    Cesr=0.2,
     Rsource=0,
     Rload=rload,
     Vdiode=0.6,
     Rdiode=0,
-    Rg=100e3,
-    Rf=0,
-    Cf=470e-9,
-    controller=analog_type1_with_dc_gain_controller,
+    controller=type1_compensator,
+    synchronous=True,
+    output_current_limit=5,
+    output_voltage_limit=50,
 )
 buck.simulate(
     fs,
@@ -55,8 +45,6 @@ buck.simulate(
     # pwm_duty_cycle=1,
     pwm_frequency=20e3,
     pwm_Nskip=0,
-    output_current_limit=5,
-    output_voltage_limit=50,
 )
 
 plt.show()

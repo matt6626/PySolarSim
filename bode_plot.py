@@ -2,14 +2,7 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 import mplcursors
 import numpy as np
-
-
-class plot_data:
-    def __init__(self, ydata, ylabel) -> None:
-        self.ydata = ydata
-        self.ylabel = ylabel
-        return
-
+import plot_helper as ph
 
 class bode_plot_zpk:
     def __init__(
@@ -31,16 +24,16 @@ class bode_plot_zpk:
         flength = len(f)
 
         # Note: Decibel gain is normalised to value of 1 for any quantity that is not dimensionless
-        tf_mag_db: list[plot_data] = []
-        tf_phase_deg: list[plot_data] = []
+        tf_mag_db: list[ph.plot_data] = []
+        tf_phase_deg: list[ph.plot_data] = []
 
         # DC gain
         G0 = self.G0
         mag = G0 * np.ones(flength)
         db = 20 * np.log10(mag)
-        tf_mag_db.append(plot_data(db, "DC Gain"))
+        tf_mag_db.append(ph.plot_data(db, "DC Gain"))
         phase_deg = np.zeros(flength)
-        tf_phase_deg.append(plot_data(phase_deg, "DC Phase"))
+        tf_phase_deg.append(ph.plot_data(phase_deg, "DC Phase"))
 
         # Zeroes
         f_zeroes = [zero for zero in self.f_zeroes if zero != 0]
@@ -52,9 +45,9 @@ class bode_plot_zpk:
                 g_jw = f * 1j
                 mag = np.abs(g_jw)
                 db = 20 * np.log10(mag)
-                tf_mag_db.append(plot_data(db, f"Zero (f = {0} Hz)"))
+                tf_mag_db.append(ph.plot_data(db, f"Zero (f = {0} Hz)"))
                 phase_deg = np.rad2deg(np.angle(g_jw))
-                tf_phase_deg.append(plot_data(phase_deg, f"Zero (f = {0} Hz)"))
+                tf_phase_deg.append(ph.plot_data(phase_deg, f"Zero (f = {0} Hz)"))
 
         # G = (1 + j*f/f0)
         # |G| = sqrt([1]^2 + (f/f0)^2)
@@ -64,9 +57,9 @@ class bode_plot_zpk:
             g_jw = 1 + (f / f_zero) * 1j
             mag = np.abs(g_jw)
             db = 20 * np.log10(mag)
-            tf_mag_db.append(plot_data(db, f"Zero (f = {f_mag} Hz)"))
+            tf_mag_db.append(ph.plot_data(db, f"Zero (f = {f_mag} Hz)"))
             phase_deg = np.rad2deg(np.angle(g_jw))
-            tf_phase_deg.append(plot_data(phase_deg, f"Zero (f = {f_mag} Hz)"))
+            tf_phase_deg.append(ph.plot_data(phase_deg, f"Zero (f = {f_mag} Hz)"))
 
         # Poles
         f_poles = [pole for pole in self.f_poles if pole != 0]
@@ -77,9 +70,9 @@ class bode_plot_zpk:
             g_jw = 1 / (f * 1j)
             mag = np.abs(g_jw)
             db = 20 * np.log10(mag)
-            tf_mag_db.append(plot_data(db, f"Pole (f = {0} Hz)"))
+            tf_mag_db.append(ph.plot_data(db, f"Pole (f = {0} Hz)"))
             phase_deg = np.rad2deg(np.angle(g_jw))
-            tf_phase_deg.append(plot_data(phase_deg, f"Pole (f = {0} Hz)"))
+            tf_phase_deg.append(ph.plot_data(phase_deg, f"Pole (f = {0} Hz)"))
 
         # G = 1 / (1 + j*f/f0)
         # |G| = 1 / sqrt([1]^2 + (f/f0)^2)
@@ -90,9 +83,9 @@ class bode_plot_zpk:
             g_jw = 1 / (1 + (f / f_pole) * 1j)
             mag = np.abs(g_jw)
             db = 20 * np.log10(mag)
-            tf_mag_db.append(plot_data(db, f"Pole (f = {f_mag:.2f} Hz)"))
+            tf_mag_db.append(ph.plot_data(db, f"Pole (f = {f_mag:.2f} Hz)"))
             phase_deg = np.rad2deg(np.angle(g_jw))
-            tf_phase_deg.append(plot_data(phase_deg, f"Pole (f = {f_mag:.2f} Hz)"))
+            tf_phase_deg.append(ph.plot_data(phase_deg, f"Pole (f = {f_mag:.2f} Hz)"))
 
         # Overall TF
         tot_mag = np.zeros(flength)
@@ -101,8 +94,8 @@ class bode_plot_zpk:
             tot_mag = tot_mag + pd.ydata
         for pd in tf_phase_deg:
             tot_phase_deg = tot_phase_deg + pd.ydata
-        tf_mag_db.append(plot_data(tot_mag, f"Combined Magnitude (dB)"))
-        tf_phase_deg.append(plot_data(tot_phase_deg, "Combined Phase (deg)"))
+        tf_mag_db.append(ph.plot_data(tot_mag, f"Combined Magnitude (dB)"))
+        tf_phase_deg.append(ph.plot_data(tot_phase_deg, "Combined Phase (deg)"))
 
         nplots = len(tf_mag_db)
         fig = plt.figure(constrained_layout=True)
@@ -150,16 +143,16 @@ class bode_plot_zpk:
         flength = len(f)
 
         # Note: Decibel gain is normalised to value of 1 for any quantity that is not dimensionless
-        tf_mag_db: list[plot_data] = []
-        tf_phase_deg: list[plot_data] = []
+        tf_mag_db: list[ph.plot_data] = []
+        tf_phase_deg: list[ph.plot_data] = []
 
         # DC gain
         G0 = self.G0
         mag = G0 * np.ones(flength)
         db = 20 * np.log10(mag)
-        tf_mag_db.append(plot_data(db, "DC Gain"))
+        tf_mag_db.append(ph.plot_data(db, "DC Gain"))
         phase_deg = np.zeros(flength)
-        tf_phase_deg.append(plot_data(phase_deg, "DC Phase"))
+        tf_phase_deg.append(ph.plot_data(phase_deg, "DC Phase"))
 
         # Zeroes
         # |G| = (1+(f/f0)^2)^-0.5
@@ -168,9 +161,9 @@ class bode_plot_zpk:
         for f_zero in f_zeroes:
             mag = (1 + (f / f_zero) ** 2) ** -0.5
             db = 20 * np.log10(mag)
-            tf_mag_db.append(plot_data(db, f"Zero (f = {f_zero} Hz)"))
+            tf_mag_db.append(ph.plot_data(db, f"Zero (f = {f_zero} Hz)"))
             phase_deg = np.rad2deg(np.arctan(f / f_zero))
-            tf_phase_deg.append(plot_data(phase_deg, f"Zero (f = {f_zero} Hz)"))
+            tf_phase_deg.append(ph.plot_data(phase_deg, f"Zero (f = {f_zero} Hz)"))
 
         # Poles
         # |G| = (1+(f/f0)^2)^0.5
@@ -179,9 +172,9 @@ class bode_plot_zpk:
         for f_pole in f_poles:
             mag = (1 + (f / f_pole) ** 2) ** -0.5
             db = 20 * np.log10(mag)
-            tf_mag_db.append(plot_data(db, f"Zero (f = {f_pole} Hz)"))
+            tf_mag_db.append(ph.plot_data(db, f"Zero (f = {f_pole} Hz)"))
             phase_deg = np.rad2deg(-np.arctan(f / f_pole))
-            tf_phase_deg.append(plot_data(phase_deg, f"Zero (f = {f_pole} Hz)"))
+            tf_phase_deg.append(ph.plot_data(phase_deg, f"Zero (f = {f_pole} Hz)"))
 
         # Overall TF
         tot_mag = np.zeros(flength)
@@ -190,8 +183,8 @@ class bode_plot_zpk:
             tot_mag = tot_mag + pd.ydata
         for pd in tf_phase_deg:
             tot_phase_deg = tot_phase_deg + pd.ydata
-        tf_mag_db.append(plot_data(tot_mag, f"Combined Magnitude (dB)"))
-        tf_phase_deg.append(plot_data(tot_phase_deg, "Combined Phase (deg)"))
+        tf_mag_db.append(ph.plot_data(tot_mag, f"Combined Magnitude (dB)"))
+        tf_phase_deg.append(ph.plot_data(tot_phase_deg, "Combined Phase (deg)"))
 
         nplots = len(tf_mag_db)
         fig = plt.figure(constrained_layout=True)
