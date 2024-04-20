@@ -172,18 +172,19 @@ class analog_type_1_with_dc_gain_controller(voltage_mode_controller):
         )
 
         # If saturation occurs, recalculate v_cf and i_cf
-        # v_cf = v_control - i_cf * (rf + rg) + v_out
+        # v_out + i_cf * (rf + rg) + v_cf = v_control
+        # v_cf = v_control - i_cf * (rf + rg) - v_out
         # i_cf = C dv_cf / dt
         #
         # i_cf = C * (v_cf - v_cf_0) / dt
-        # i_cf = C * (v_control - i_cf * (rf + rg) + v_out - v_cf_0) / dt
+        # i_cf = C * (v_control - i_cf * (rf + rg) - v_out - v_cf_0) / dt
         #
-        # i_cf * dt = C * (v_control - i_cf * (rf + rg) + v_out - v_cf_0)
-        # i_cf * dt + i_cf * (rf + rg)  = C * (v_control + v_out - v_cf_0)
-        # i_cf * (dt + rf + rg)  = C * (v_control + v_out - v_cf_0)
-        # i_cf = C * (v_control + v_out - v_cf_0) / (dt + rf + rg)
+        # i_cf * dt = C * (v_control - i_cf * (rf + rg) - v_out - v_cf_0)
+        # i_cf * dt + i_cf * C * (rf + rg)  = C * (v_control - v_out - v_cf_0)
+        # i_cf * (dt + C * (rf + rg))  = C * (v_control - v_out - v_cf_0)
+        # i_cf = C * (v_control - v_out - v_cf_0) / (dt + C * (rf + rg))
         if v_control == vsupply_neg or v_control == vsupply_pos:
-            i_cf = cf * (v_control + v_out - v_cf_0) / (dt + rf + rg)
+            i_cf = cf * (v_control - v_out - v_cf_0) / (dt + cf * (rf + rg))
             v_cf = ((i_cf / cf) * dt) + v_cf_0
 
         # assign state variables

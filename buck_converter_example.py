@@ -30,6 +30,7 @@ buck = bc.buck_converter(
     Vdiode=0.6,
     Rdiode=0,
     controller=type1_compensator,
+    synchronous=False,
 )
 buck.simulate(fs, simulation_length_seconds, input_voltage, Vref=vref)
 
