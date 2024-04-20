@@ -349,7 +349,7 @@ class buck_converter:
             if pwm_duty_cycle is None:
                 # controller
                 vcontrol[curr] = self.controller.simulate(
-                    vref[prev], vo[prev], dt, plot=False
+                    vref[prev], vo[prev], dt, plot=True
                 )
 
                 # TODO: should integrate the current limiting into the controller

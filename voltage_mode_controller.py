@@ -41,55 +41,50 @@ class voltage_mode_controller:
     def plot(self, dt, init=False):
         import matplotlib.pyplot as plt
         import numpy as np
-        import matplotlib.animation as animation
-
-        # TODO: plotting in realtime is unbelievably slow in current implementation
 
         if init:
-
             self.vars = dict()
-
-            # Get the variables to be plotted and store them in a dictionary which will record the entire plot history for the variables being plotted
             plot_data_list = self.get_controller_state_plot_data()
             for plot_data in plot_data_list:
                 key = plot_data.ylabel
                 value = plot_data.ydata
                 self.vars[key] = [value]
 
-            # Perform initial plot
             self.t = [0]
-
-            # Generate Plot
             plt.ion()
-            # plt.autoscale(enable=True, axis="both", tight=True)
-            self.fig = plt.figure()
-            self.nplots = len(self.vars)
-            for i, (key, value) in enumerate(self.vars.items()):
-                value = [value, self.fig.add_subplot(self.nplots, 1, i + 1)]
-                value[1].plot(self.t[0], value[0])
-                value[1].set(xlabel="time (s)", ylabel=f"{key}")
-                value[1].relim()
-                value[1].autoscale_view()
-                self.vars[key] = value  # update the actual dict
-        else:
-            # Update
-            self.t.append(self.t[-1] + dt)
+            self.fig, self.ax = plt.subplots(len(self.vars), 1)
+            self.lines = {}
 
-            # Append values to memory
+            for i, (key, value) in enumerate(self.vars.items()):
+                (line,) = self.ax[i].plot(self.t, value, animated=True)
+                self.ax[i].set(xlabel="time (s)", ylabel=f"{key}")
+                self.lines[key] = line
+
+            self.fig.canvas.draw()
+            self.bg = [self.fig.canvas.copy_from_bbox(ax.bbox) for ax in self.ax]
+
+        else:
+            self.t.append(self.t[-1] + dt)
             plot_data_list = self.get_controller_state_plot_data()
+
             for plot_data in plot_data_list:
                 key = plot_data.ylabel
                 value = plot_data.ydata
-                self.vars[key][0].append(value)
+                self.vars[key].append(value)
+                self.lines[key].set_ydata(self.vars[key])
+                self.lines[key].set_xdata(self.t)
 
-            for key, value in self.vars.items():
-                value[1].relim()
-                value[1].autoscale_view()
-                value[1].get_lines()[0].set_xdata(self.t)
-                value[1].get_lines()[0].set_ydata(value[0])
+            for i, (key, ax) in enumerate(zip(self.vars.keys(), self.ax)):
+                ax.relim()
+                ax.autoscale_view()
+                self.fig.canvas.restore_region(self.bg[i])
+                ax.draw_artist(self.lines[key])
 
-            self.fig.canvas.draw()
-            self.fig.canvas.flush_events()
+            # Blit all subplots at once
+            bbox = self.fig.bbox.union([ax.bbox for ax in self.ax])
+            self.fig.canvas.blit(bbox)
+            # self.fig.canvas.draw_idle()
+            plt.pause(0.001)
 
     def bode(self):
         import bode_plot as bp
