@@ -1,3 +1,10 @@
 # Ignore Python compiled files
 __pycache__/
 *.pyc
+
+LyxNotes/
+SolarPanelSimulationArticles/
+ascii-art/
+
+.DS_Store
+venv/
