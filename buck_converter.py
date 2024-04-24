@@ -1,6 +1,8 @@
 import numpy as np
 import voltage_mode_controller as vmc
 import bode_plot as bp
+from multiprocessing import Process, Queue, Pipe
+from gui import gui
 
 class buck_converter:
 
@@ -32,6 +34,16 @@ class buck_converter:
         self.inductor_current_limit = inductor_current_limit
         self.synchronous = synchronous
         self.controller = controller
+
+        # GUI App - currently associated per buck converter instance
+        parent_connection, self.child_conn = Pipe()
+        self.gui_process = Process(target=gui, args=(parent_connection,))
+        self.gui_process.start()
+        # TODO: eventually move all plotting to the simulator (ie. buck converter)
+        # but this will require a more generalised approach to returning all plot variables and storing their history in the simulator
+        # because it's too manual / requires too much effort to track new variables right now
+        self.controller.gui_pipe = self.child_conn
+        # self.child_conn.send("foo")
 
     def on_state(self, t0, PA, Vin, Rs, il0, Rl, L, vc0, ESR, C, R):
         K1 = C + ESR * C / R

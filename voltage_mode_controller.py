@@ -1,6 +1,13 @@
 import numpy as np
 from collections import namedtuple
 import plot_helper as ph
+from multiprocessing import connection
+
+# from dash import Dash, dcc, html
+# from dash.dependencies import Output, Input, State
+# import plotly.graph_objs as go
+import json
+import time
 
 class voltage_mode_controller:
 
@@ -12,6 +19,8 @@ class voltage_mode_controller:
         self.v_out = 0
         self.v_err = 0
         self.v_control = 0
+        self.gui_pipe: connection.Connection = None
+        self.gui_ready = False
 
     def control_func(self, reference, input, dt):
         return input
@@ -38,53 +47,150 @@ class voltage_mode_controller:
         plot_data.append(ph.plot_data(self.v_err, "v_err"))
         return plot_data
 
+    def update_graph_scatter(self):
+        pass
+        # # Check if stored_data is None
+        # if stored_data is None:
+        #     # If it's None, initialize it with some default values
+        #     state = {"t": [0], "vars": {key: [0] for key in self.vars.keys()}}
+        # else:
+        #     # If it's not None, load the current state of the simulation from the stored data
+        #     state = json.loads(stored_data)
+
+        # # Create a new figure with the updated data
+        # fig = go.Figure()
+
+        # for key in state["vars"].keys():
+        #     fig.add_trace(
+        #         go.Scatter(
+        #             x=state["t"], y=state["vars"][key], mode="lines", name=f"{key}"
+        #         )
+        #     )
+
+        # # Get the min and max of all y values
+        # y_values = [value for sublist in state["vars"].values() for value in sublist]
+        # y_min = min(y_values)
+        # y_max = max(y_values)
+
+        # fig.update_xaxes(range=[min(state["t"]), max(state["t"])])  # set x-axis range
+        # fig.update_yaxes(range=[y_min, y_max])  # set y-axis range
+
+        # fig.update_layout(
+        #     height=600,
+        #     width=600,
+        #     title_text="Voltage Mode Controller",
+        #     # transition=dict(duration=50, easing="cubic-in-out"),
+        # )
+
+        # return fig, json.dumps(state)  # return the figure and the updated state
+
     def plot(self, dt, init=False):
-        import matplotlib.pyplot as plt
-        import numpy as np
+        gui_pipe = self.gui_pipe
+        if gui_pipe is None:
+            return
+        # if not self.gui_ready:
+        #     try:
+        #         msg = gui_pipe.recv()
+        #     except:
+        #         return
+        #     if msg == "gui-ready":
+        #         print("hmm")
+        #         self.gui_ready = True
+        #     else:
+        #         return
+        #     print("Asdf")
 
         if init:
-            self.vars = dict()
-            plot_data_list = self.get_controller_state_plot_data()
-            for plot_data in plot_data_list:
-                key = plot_data.ylabel
-                value = plot_data.ydata
-                self.vars[key] = [value]
-
-            self.t = [0]
-            plt.ion()
-            self.fig, self.ax = plt.subplots(len(self.vars), 1)
-            self.lines = {}
-
-            for i, (key, value) in enumerate(self.vars.items()):
-                (line,) = self.ax[i].plot(self.t, value, animated=True)
-                self.ax[i].set(xlabel="time (s)", ylabel=f"{key}")
-                self.lines[key] = line
-
-            self.fig.canvas.draw()
-            self.bg = [self.fig.canvas.copy_from_bbox(ax.bbox) for ax in self.ax]
-
+            dt = 0
         else:
-            self.t.append(self.t[-1] + dt)
-            plot_data_list = self.get_controller_state_plot_data()
+            dt = dt
 
-            for plot_data in plot_data_list:
-                key = plot_data.ylabel
-                value = plot_data.ydata
-                self.vars[key].append(value)
-                self.lines[key].set_ydata(self.vars[key])
-                self.lines[key].set_xdata(self.t)
+        vars = dict()
+        plot_data_list = self.get_controller_state_plot_data()
+        for plot_data in plot_data_list:
+            key = plot_data.ylabel
+            value = plot_data.ydata
+            vars[key] = value
+        state = {"dt": dt, "vars": vars}
+        gui_pipe.send(state)
 
-            for i, (key, ax) in enumerate(zip(self.vars.keys(), self.ax)):
-                ax.relim()
-                ax.autoscale_view()
-                self.fig.canvas.restore_region(self.bg[i])
-                ax.draw_artist(self.lines[key])
+        # self.fig = go.Figure()
+        # self.lines = {}
 
-            # Blit all subplots at once
-            bbox = self.fig.bbox.union([ax.bbox for ax in self.ax])
-            self.fig.canvas.blit(bbox)
-            # self.fig.canvas.draw_idle()
-            plt.pause(0.001)
+        # for i, (key, value) in enumerate(self.vars.items()):
+        #     self.lines[key] = go.Scatter(
+        #         x=self.t, y=value, mode="lines", name=f"{key}"
+        #     )
+        #     self.fig.add_trace(self.lines[key])
+
+        #     # Get the min and max of all y values
+        #     y_values = [value for sublist in self.vars.values() for value in sublist]
+        #     y_min = min(y_values)
+        #     y_max = max(y_values)
+
+        #     self.fig.update_xaxes(range=[min(self.t), max(self.t)])  # set x-axis range
+        #     self.fig.update_yaxes(range=[y_min, y_max])  # set y-axis range
+
+        #     self.fig.update_layout(
+        #         height=600,
+        #         width=600,
+        #         title_text="Voltage Mode Controller",
+        #         # transition=dict(duration=50, easing="cubic-in-out"),
+        #     )
+
+        #     # Save the initial state of the simulation to a file
+        #     with self.lock:
+        #         with open("state.json", "w") as f:
+        #             json.dump(
+        #                 {
+        #                     "t": self.t,
+        #                     "vars": self.vars,
+        #                 },
+        #                 f,
+        #             )
+
+        #     app = Dash(__name__)
+        #     app.layout = html.Div(
+        #         [
+        #             dcc.Graph(id="live-graph"),
+        #             dcc.Interval(id="graph-update", interval=100, n_intervals=0),
+        #             dcc.Store(id="store", storage_type="session"),
+        #         ]
+        #     )
+
+        #     # Modify the callback to use the dcc.Store
+        #     @app.callback(
+        #         [Output("live-graph", "figure"), Output("store", "data")],
+        #         [Input("graph-update", "n_intervals")],
+        #         [State("store", "data")],
+        #     )
+        #     def update_graph(n, stored_data):
+        #         print("foo")
+        #         # Create a simple static figure
+        #         fig = go.Figure(data=[go.Scatter(x=[1, 2, 3], y=[4, 1, 2])])
+
+        #         # Use a static dictionary for stored_data
+        #         stored_data = json.dumps({"key": "value"})
+
+        #         return fig, stored_data
+        #         # # Check if the component is None
+        #         # if n is None:
+        #         #     raise Dash.exceptions.PreventUpdate
+        #         # out = self.update_graph_scatter(n, stored_data)
+        #         # print(out)
+        #         # return out
+
+        #     # Start the Dash app in a separate thread
+        #     threading.Thread(target=app.run_server, kwargs={"debug": False}).start()
+
+        # else:
+        #     self.t.append(self.t[-1] + dt)
+        #     plot_data_list = self.get_controller_state_plot_data()
+
+        #     for plot_data in plot_data_list:
+        #         key = plot_data.ylabel
+        #         value = plot_data.ydata
+        #         self.vars[key].append(value)
 
     def bode(self):
         import bode_plot as bp
