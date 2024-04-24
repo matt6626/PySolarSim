@@ -3,7 +3,6 @@ import numpy as np
 import buck_converter as bc
 import voltage_mode_controller as vmc
 
-
 def app():
     fs = 2e6
     Ts = 1 / fs

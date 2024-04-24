@@ -13,7 +13,7 @@ def gui(parent_conn: connection.Connection):
     parent_conn = parent_conn
 
     # Create app
-    app = dash.Dash()
+    app = dash.Dash(__name__, update_title=None)
     app.layout = html.Div(
         [
             dcc.Graph(id="live-graph"),
@@ -21,6 +21,25 @@ def gui(parent_conn: connection.Connection):
             dcc.Store(id="data-store"),
         ]
     )
+
+    def append_new_data_to_store(store, msg):
+
+        # Append the time step based on delta time received
+        prev_time = store["t"][-1]
+        dt = msg["dt"]
+        curr_time = prev_time + dt
+        store["t"].append(curr_time)
+
+        # Append the data from any variable received
+        vars = store.get("vars", {})  # Copy of existing vars history
+        for key, value in msg.get("vars", {}).items():
+            if vars.get(key, None) is None:
+                vars[key] = [value]
+            else:
+                vars[key].append(value)
+        store["vars"] = (
+            vars  # Overwrite existing vars history with the old + appended history
+        )
 
     # note for implementation of data stream, only stream the new data coming in, store the history of graphs in the dcc store
     @app.callback(
@@ -32,32 +51,22 @@ def gui(parent_conn: connection.Connection):
         if data is None:
             # Initialize with some default data
             data = {"t": [0], "vars": {}}
-            # parent_conn.send("gui-ready")
+            parent_conn.send("gui-ready")
             return [data]
-            # return json.dumps(initial_data)  # Serialize the dictionary to a JSON string
 
-        if parent_conn.poll():
+        msg = None
+        while parent_conn.poll():
             try:
                 msg = parent_conn.recv()
-            except:
+            except Exception as e:
+                print(e)
                 return dash.no_update
-            # print(f"stream: {msg}")
+            append_new_data_to_store(data, msg)
 
-            # store the new data to a running history
-            data["t"].append(data["t"][-1] + msg["dt"])
-            # print(f"keys: [{msg.items()}]")
-            vars = data.get("vars", {})
-            # print(f"vars: {vars}")
-            for key, value in msg.get("vars", {}).items():
-                # vars[key].append(value)
-                if vars.get(key, None) is None:
-                    vars[key] = [value]
-                else:
-                    vars[key].append(value)
-            data["vars"] = vars
-
-            return [data]  # Serialize the dictionary to a JSON string
-        return dash.no_update
+        if msg is not None:
+            return [data]
+        else:
+            return dash.no_update
 
     # Create callbacks
     @app.callback(
