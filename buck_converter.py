@@ -36,14 +36,17 @@ class buck_converter:
         self.controller = controller
 
         # GUI App - currently associated per buck converter instance
-        parent_connection, self.child_conn = Pipe()
-        self.gui_process = Process(target=gui, args=(parent_connection,))
+        self.to_gui_queue = Queue()
+        self.from_gui_queue = Queue()
+        self.gui_process = Process(
+            target=gui, args=(self.to_gui_queue, self.from_gui_queue)
+        )
         self.gui_process.start()
         # TODO: eventually move all plotting to the simulator (ie. buck converter)
         # but this will require a more generalised approach to returning all plot variables and storing their history in the simulator
         # because it's too manual / requires too much effort to track new variables right now
-        self.controller.gui_pipe = self.child_conn
-        # self.child_conn.send("foo")
+        self.controller.to_gui_queue = self.to_gui_queue
+        self.controller.from_gui_queue = self.from_gui_queue
 
     def on_state(self, t0, PA, Vin, Rs, il0, Rl, L, vc0, ESR, C, R):
         K1 = C + ESR * C / R
@@ -360,9 +363,7 @@ class buck_converter:
 
             if pwm_duty_cycle is None:
                 # controller
-                vcontrol[curr] = self.controller.simulate(
-                    vref[prev], vo[prev], dt, plot=True
-                )
+                vcontrol[curr] = self.controller.simulate(vref[prev], vo[prev], dt)
 
                 # TODO: should integrate the current limiting into the controller
                 # TODO: combine many controllers into single controller would be nice

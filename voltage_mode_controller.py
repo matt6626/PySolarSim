@@ -1,7 +1,7 @@
 import numpy as np
 from collections import namedtuple
 import plot_helper as ph
-from multiprocessing import connection
+from multiprocessing import Queue
 
 class voltage_mode_controller:
 
@@ -13,15 +13,18 @@ class voltage_mode_controller:
         self.v_out = 0
         self.v_err = 0
         self.v_control = 0
-        self.gui_pipe: connection.Connection = None
+        self.t = 0
+        self.from_gui_queue: Queue = None
+        self.to_gui_queue: Queue = None
         self.gui_ready = False
+        self.plot_enabled = False
 
     def control_func(self, reference, input, dt):
         return input
 
-    def simulate(self, v_ref, v_out, dt, plot=False):
+    def simulate(self, v_ref, v_out, dt):
         if self.simulation_not_started:
-            if plot:
+            if self.plot_enabled:
                 self.plot(dt, init=True)
             self.simulation_not_started = False
         v_control = self.control_func(v_ref, v_out, dt)
@@ -29,8 +32,9 @@ class voltage_mode_controller:
         self.v_out = v_out
         self.v_err = v_ref - v_out
         self.v_control = v_control
+        self.t = self.t + dt
 
-        if plot:
+        if self.plot_enabled:
             self.plot(dt)
         return v_control
 
@@ -39,22 +43,21 @@ class voltage_mode_controller:
         plot_data.append(ph.plot_data(self.v_ref, "v_ref"))
         plot_data.append(ph.plot_data(self.v_out, "v_out"))
         plot_data.append(ph.plot_data(self.v_err, "v_err"))
+        plot_data.append(ph.plot_data(self.v_control, "v_control"))
+        plot_data.append(ph.plot_data(self.t, "t"))
         return plot_data
 
     def plot(self, dt, init=False):
-        gui_pipe = self.gui_pipe
-        if gui_pipe is None:
-            return
-        if not self.gui_ready:
-            try:
-                msg = gui_pipe.recv()
-            except:
-                return
+        from_gui_queue = self.from_gui_queue
+        to_gui_queue = self.to_gui_queue
+        if from_gui_queue is None or to_gui_queue is None:
+            raise Exception("No gui queues, but plotting is enabled!")
+        while not self.gui_ready:
+            msg = from_gui_queue.get()
             if msg == "gui-ready":
-                print("recv: gui_ready")
+                print(f"recv: {msg}")
                 self.gui_ready = True
-            else:
-                return
+                continue
 
         if init:
             dt = 0
@@ -68,7 +71,10 @@ class voltage_mode_controller:
             value = plot_data.ydata
             vars[key] = value
         state = {"dt": dt, "vars": vars}
-        gui_pipe.send(state)
+        try:
+            to_gui_queue.put(state)
+        except Exception as e:
+            print("exception: {e}")
 
     def bode(self):
         import bode_plot as bp
@@ -120,13 +126,10 @@ class analog_type_1_with_dc_gain_controller(voltage_mode_controller):
         self.v_control = v_control_0
 
     def get_controller_state_plot_data(self) -> list[ph.plot_data]:
-        plot_data: list[ph.plot_data] = []
-        plot_data.append(ph.plot_data(self.v_ref, "v_ref"))
-        plot_data.append(ph.plot_data(self.v_out, "v_out"))
-        plot_data.append(ph.plot_data(self.v_err, "v_err"))
-        plot_data.append(ph.plot_data(self.v_control, "v_control"))
-        plot_data.append(ph.plot_data(self.v_cf, "v_cf"))
-        plot_data.append(ph.plot_data(self.i_cf, "i_cf"))
+        # plot_data = super().get_controller_state_plot_data()
+        # plot_data.append(ph.plot_data(self.v_cf, "v_cf"))
+        # plot_data.append(ph.plot_data(self.i_cf, "i_cf"))
+        plot_data = [ph.plot_data(self.t, "t")]
         return plot_data
 
     def control_func(self, reference, input, dt):
@@ -216,11 +219,7 @@ class analog_type3_compensator_controller(voltage_mode_controller):
         self.v_control = v_control_0
 
     def get_controller_state_plot_data(self) -> list[ph.plot_data]:
-        plot_data: list[ph.plot_data] = []
-        plot_data.append(ph.plot_data(self.v_ref, "v_ref"))
-        plot_data.append(ph.plot_data(self.v_out, "v_out"))
-        plot_data.append(ph.plot_data(self.v_err, "v_err"))
-        plot_data.append(ph.plot_data(self.v_control, "v_control"))
+        plot_data = super().get_controller_state_plot_data()
         return plot_data
 
     def control_func(self, reference, input, dt):

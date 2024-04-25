@@ -1,19 +1,15 @@
-from multiprocessing import Pipe, connection
+from multiprocessing import Queue, Lock
+import queue
 
 from dash import dash, dcc, html
 from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 
-import json
 
-
-def gui(parent_conn: connection.Connection):
-
-    # Connection pipe back to the parent process
-    parent_conn = parent_conn
+def gui(to_gui_queue: Queue, from_gui_queue: Queue):
 
     # Create app
-    app = dash.Dash(__name__, update_title=None)
+    app = dash.Dash(__name__, title="Simulation", update_title=None)
     app.layout = html.Div(
         [
             dcc.Graph(id="live-graph"),
@@ -22,24 +18,42 @@ def gui(parent_conn: connection.Connection):
         ]
     )
 
+    data_stream_lock = Lock()
+
     def append_new_data_to_store(store, msg):
+        print("START: append_new_data_to_store")
 
         # Append the time step based on delta time received
         prev_time = store["t"][-1]
+        # print(f'prev_store["t"]: {store["t"]}')
         dt = msg["dt"]
         curr_time = prev_time + dt
+        print(f"prev_time: {prev_time*10**6}")
+
+        print(f"dt: {dt}")
+        print(f"curr_time: {curr_time*10**6}")
         store["t"].append(curr_time)
+        # print(f'post_store["t"]: {store["t"]}')
 
         # Append the data from any variable received
-        vars = store.get("vars", {})  # Copy of existing vars history
-        for key, value in msg.get("vars", {}).items():
-            if vars.get(key, None) is None:
-                vars[key] = [value]
+        store_vars = store.get("vars", {})  # Copy of existing vars history
+        recvd_vars = msg.get("vars", {})
+        for key, value in recvd_vars.items():
+            if store_vars.get(key, None) is None:
+                store_vars[key] = [value]
             else:
-                vars[key].append(value)
-        store["vars"] = (
-            vars  # Overwrite existing vars history with the old + appended history
-        )
+                store_vars[key].append(value)
+        store["vars"] = store_vars
+
+        recvd_time = recvd_vars["t"]
+
+        if curr_time != recvd_time:
+            # print(f"curr_time: {curr_time}")
+            # print(f'vars["t"]: {vars["t"]}')
+            raise Exception(
+                f"curr_time: {curr_time} does not equal recvd_time: {recvd_time}"
+            )
+        print(f"END: append_new_data_to_store\n")
 
     # note for implementation of data stream, only stream the new data coming in, store the history of graphs in the dcc store
     @app.callback(
@@ -48,24 +62,41 @@ def gui(parent_conn: connection.Connection):
         [State("data-store", "data")],
     )
     def process_data_stream(n_intervals, data):
+        print(f"START: process_data_stream")
+        print(f"n_intervals: {n_intervals}")
+        if not data_stream_lock.acquire(block=False):
+            print(f"could not aquire lock")
+            print(f"END: process_data_stream")
+            return dash.no_update
         if data is None:
             # Initialize with some default data
             data = {"t": [0], "vars": {}}
-            parent_conn.send("gui-ready")
+            from_gui_queue.put("gui-ready")
+            data_stream_lock.release()
+            print(f"END: process_data_stream")
             return [data]
 
         msg = None
-        while parent_conn.poll():
+        while not to_gui_queue.empty():
             try:
-                msg = parent_conn.recv()
+                msg = to_gui_queue.get_nowait()
+                # print(f"n_intervals: {n_intervals}")
+                append_new_data_to_store(data, msg)
+            except queue.Empty:
+                break
             except Exception as e:
-                print(e)
+                print(f"exception: {e} on {msg}")
+                data_stream_lock.release()
+                print(f"END: process_data_stream")
                 return dash.no_update
-            append_new_data_to_store(data, msg)
 
         if msg is not None:
+            data_stream_lock.release()
+            print(f"END: process_data_stream")
             return [data]
         else:
+            data_stream_lock.release()
+            print(f"END: process_data_stream")
             return dash.no_update
 
     # Create callbacks
@@ -120,4 +151,3 @@ def gui(parent_conn: connection.Connection):
         return [fig]
 
     app.run_server(debug=True, use_reloader=False)
-    parent_conn.close()

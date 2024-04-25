@@ -23,6 +23,7 @@ def app():
     type1_compensator = vmc.analog_type_1_with_dc_gain_controller(
         rg=10e3, rf=1e3, cf=470e-9, vsupply_neg=0, vsupply_pos=1
     )
+    type1_compensator.plot_enabled = True
 
     buck = bc.buck_converter(
         L=200e-6,
