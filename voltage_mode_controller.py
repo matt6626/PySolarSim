@@ -2,6 +2,7 @@ import numpy as np
 from collections import namedtuple
 import plot_helper as ph
 from multiprocessing import Queue
+import time
 
 class voltage_mode_controller:
 
@@ -18,11 +19,16 @@ class voltage_mode_controller:
         self.to_gui_queue: Queue = None
         self.gui_ready = False
         self.plot_enabled = False
+        self.last_sim_time = 0
 
     def control_func(self, reference, input, dt):
         return input
 
     def simulate(self, v_ref, v_out, dt):
+        delta_sim_step_time = time.time() - self.last_sim_time
+        if delta_sim_step_time > 1:
+            print(f"dt since last sim step: {delta_sim_step_time}")
+        self.last_sim_time = time.time()
         if self.simulation_not_started:
             if self.plot_enabled:
                 self.plot(dt, init=True)
@@ -126,10 +132,9 @@ class analog_type_1_with_dc_gain_controller(voltage_mode_controller):
         self.v_control = v_control_0
 
     def get_controller_state_plot_data(self) -> list[ph.plot_data]:
-        # plot_data = super().get_controller_state_plot_data()
-        # plot_data.append(ph.plot_data(self.v_cf, "v_cf"))
-        # plot_data.append(ph.plot_data(self.i_cf, "i_cf"))
-        plot_data = [ph.plot_data(self.t, "t")]
+        plot_data = super().get_controller_state_plot_data()
+        plot_data.append(ph.plot_data(self.v_cf, "v_cf"))
+        plot_data.append(ph.plot_data(self.i_cf, "i_cf"))
         return plot_data
 
     def control_func(self, reference, input, dt):

@@ -21,9 +21,10 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
     app.layout = html.Div(
         [
             dcc.Graph(id="live-graph"),
-            dcc.Interval(id="data-stream", interval=100, n_intervals=0),
+            # TODO: investigate data stores not updating when the callback interval is short (eg. 100 ms)
+            dcc.Interval(id="data-stream", interval=10000, n_intervals=0),
             dcc.Store(id="interval-count", clear_data=True),
-            dcc.Store(id="data-store", clear_data=True, storage_type="session"),
+            dcc.Store(id="data-store", clear_data=True),
             dcc.Store(id="dummy-output"),
         ]
     )
@@ -98,17 +99,9 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
                 print(f"n_int={interval_count}: {str}")
 
             def print_data(data: dict = {}):
-                t = data.get("t", None)
-                if t is not None:
-                    t_len = len(t)
-                    if t_len == 1:
-                        int_print(f"len_t: {len(t)} t: [{t[0]}]")
-                    elif t_len == 2:
-                        int_print(f"len_t: {len(t)} t: [{t[0]}, {t[-1]}]")
-                    else:
-                        int_print(f"len_t: {len(t)} t: [{t[0]}, ..., {t[-1]}]")
-
-            int_print("")
+                vars: dict = data.get("vars", None)
+                for var_name, var in vars.items():
+                    int_print(f"{var_name}_len={len(var)}")
 
             if not data_stream_lock.acquire(block=False):
                 print(f"Failed attempt to acquire lock.")
@@ -118,7 +111,6 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
             if initialised.acquire(block=False):
                 interval_count = 0
                 int_print(f"PROCESS_DATA_STREAM: INIT")
-                int_print(f"foo")
                 data = {"t": [0], "vars": {}}
                 from_gui_queue.put("gui-ready")
                 print_data(data)
@@ -128,6 +120,8 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
             if interval_count is None:
                 print("err")
             interval_count = interval_count + 1
+
+            int_print("")
 
             msg = None
             while not to_gui_queue.empty():
@@ -147,11 +141,14 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
             if msg is not None:
                 print_data(data)
                 int_print(f"END: process_data_stream [update graph]")
+                int_print(f"{interval_count}")
                 return [data, interval_count]
+                int_print("foo")
             else:
                 int_print(f"END: process_data_stream [no graph update]")
                 data_stream_lock.release()
                 return [dash.no_update, interval_count]
+            int_print("bar")
         except Exception as e:
             logging.error(f"Error in process_data_stream: {e}")
         finally:
@@ -171,11 +168,11 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
         # print(f'state["dt"] {state["dt"]}')
 
         # Check if stored_data is None
-        if data is None:
-            pass
-            # If it's None, initialize it with some default values
-            # state = {"t": [0], "vars": {key: [0] for key in self.vars.keys()}}
-            # state = {"t": [0], "vars": {"foo": [1], "bar": [1]}}
+        # if data is None:
+        # pass
+        # If it's None, initialize it with some default values
+        # state = {"t": [0], "vars": {key: [0] for key in self.vars.keys()}}
+        # state = {"t": [0], "vars": {"foo": [1], "bar": [1]}}
 
         # Create a new figure with the updated data
         fig = go.Figure()
@@ -208,4 +205,4 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
 
         return [fig]
 
-    app.run_server(debug=True, use_reloader=False)
+    app.run_server(debug=False, use_reloader=False)
