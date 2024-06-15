@@ -1,8 +1,19 @@
+"""TODO:
+    1. BUG: interval becomes smaller, dash app breaks either by not updating the data store, or by dropping data from the queue somehow
+    2. BUG: main app doesn't execute until the dash callbacks start running, not sure why. """
+
 from multiprocessing import Queue, Lock, Semaphore
 import queue
 
-from dash import dash, dcc, html
-from dash.dependencies import Input, Output, State
+from dash_extensions.enrich import (
+    dash,
+    dcc,
+    html,
+    Input,
+    Output,
+    State,
+    BlockingCallbackTransform,
+)
 import plotly.graph_objs as go
 
 from remote_pdb import RemotePdb
@@ -22,14 +33,12 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
         [
             dcc.Graph(id="live-graph"),
             # TODO: investigate data stores not updating when the callback interval is short (eg. 100 ms)
-            dcc.Interval(id="data-stream", interval=10000, n_intervals=0),
+            dcc.Interval(id="data-stream", interval=1000, n_intervals=0),
             dcc.Store(id="interval-count", clear_data=True),
             dcc.Store(id="data-store", clear_data=True),
-            dcc.Store(id="dummy-output"),
+            # dcc.Store(id="dummy-output"),
         ]
     )
-
-    data_stream_lock = Lock()
 
     def append_new_data_to_store(store, msg):
         # print("START: append_new_data_to_store")
@@ -72,24 +81,12 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
             )
         # print(f"END: append_new_data_to_store\n")
 
-    # this callback guarantees that the data-store is updated before the lock is released
-    @app.callback(Output("dummy-output", "data"), [Input("data-store", "data")])
-    def new_data_callback(data):
-        logging.info("Entered new_data_callback")
-        try:
-            print("Release lock")
-            data_stream_lock.release()
-        except Exception as e:
-            logging.error(f"Error in new_data_callback: {e}")
-        finally:
-            logging.info("Exiting new_data_callback")
-        return None
-
     # note for implementation of data stream, only stream the new data coming in, store the history of graphs in the dcc store
     @app.callback(
         [Output("data-store", "data"), Output("interval-count", "data")],
         [Input("data-stream", "n_intervals")],
         [State("data-store", "data"), State("interval-count", "data")],
+        blocking=True,
     )
     def process_data_stream(n_intervals, data, interval_count):
         logging.info("Entered process_data_stream")
@@ -99,13 +96,15 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
                 print(f"n_int={interval_count}: {str}")
 
             def print_data(data: dict = {}):
+                str = ""
+                # print(data)
+                t = data.get("t", None)
+                if t is not None:
+                    str = str + f"t[-1]: {t[-1]}"
                 vars: dict = data.get("vars", None)
                 for var_name, var in vars.items():
-                    int_print(f"{var_name}_len={len(var)}")
-
-            if not data_stream_lock.acquire(block=False):
-                print(f"Failed attempt to acquire lock.")
-                return [dash.no_update, interval_count]
+                    str = str + f"{var_name} (len={len(var)}) "
+                int_print(str)
 
             # RemotePdb("127.0.0.1", 4444).set_trace()
             if initialised.acquire(block=False):
@@ -121,8 +120,6 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
                 print("err")
             interval_count = interval_count + 1
 
-            int_print("")
-
             msg = None
             while not to_gui_queue.empty():
                 try:
@@ -135,20 +132,15 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
                     print_data(data)
                     int_print(f"exception: {e} on {msg}")
                     int_print(f"END: process_data_stream")
-                    data_stream_lock.release()
                     return [dash.no_update, interval_count]
 
             if msg is not None:
                 print_data(data)
                 int_print(f"END: process_data_stream [update graph]")
-                int_print(f"{interval_count}")
                 return [data, interval_count]
-                int_print("foo")
             else:
                 int_print(f"END: process_data_stream [no graph update]")
-                data_stream_lock.release()
                 return [dash.no_update, interval_count]
-            int_print("bar")
         except Exception as e:
             logging.error(f"Error in process_data_stream: {e}")
         finally:
@@ -205,4 +197,4 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
 
         return [fig]
 
-    app.run_server(debug=False, use_reloader=False)
+    app.run_server(debug=False, use_reloader=False, threaded=True)

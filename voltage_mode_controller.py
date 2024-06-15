@@ -19,7 +19,7 @@ class voltage_mode_controller:
         self.to_gui_queue: Queue = None
         self.gui_ready = False
         self.plot_enabled = False
-        self.last_sim_time = 0
+        self.last_sim_time = time.time()
 
     def control_func(self, reference, input, dt):
         return input
