@@ -33,7 +33,7 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
         [
             dcc.Graph(id="live-graph"),
             # TODO: investigate data stores not updating when the callback interval is short (eg. 100 ms)
-            dcc.Interval(id="data-stream", interval=1000, n_intervals=0),
+            dcc.Interval(id="data-stream", interval=100, n_intervals=0),
             dcc.Store(id="interval-count", clear_data=True),
             dcc.Store(id="data-store", clear_data=True),
             # dcc.Store(id="dummy-output"),
@@ -81,6 +81,7 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
             )
         # print(f"END: append_new_data_to_store\n")
 
+    lock = Lock()
     # note for implementation of data stream, only stream the new data coming in, store the history of graphs in the dcc store
     @app.callback(
         [Output("data-store", "data"), Output("interval-count", "data")],
@@ -89,62 +90,67 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
         blocking=True,
     )
     def process_data_stream(n_intervals, data, interval_count):
-        logging.info("Entered process_data_stream")
-        try:
+        if lock.acquire(block=False):
+            logging.info("Entered process_data_stream")
+            try:
 
-            def int_print(str):
-                print(f"n_int={interval_count}: {str}")
+                def int_print(str):
+                    print(f"n_int={interval_count}: {str}")
 
-            def print_data(data: dict = {}):
-                str = ""
-                # print(data)
-                t = data.get("t", None)
-                if t is not None:
-                    str = str + f"t[-1]: {t[-1]}"
-                vars: dict = data.get("vars", None)
-                for var_name, var in vars.items():
-                    str = str + f"{var_name} (len={len(var)}) "
-                int_print(str)
+                def print_data(data: dict = {}):
+                    str = ""
+                    # print(data)
+                    t = data.get("t", None)
+                    if t is not None:
+                        str = str + f"t[-1]: {t[-1]}"
+                    vars: dict = data.get("vars", None)
+                    for var_name, var in vars.items():
+                        str = str + f"{var_name} (len={len(var)}) "
+                    int_print(str)
 
-            # RemotePdb("127.0.0.1", 4444).set_trace()
-            if initialised.acquire(block=False):
-                interval_count = 0
-                int_print(f"PROCESS_DATA_STREAM: INIT")
-                data = {"t": [0], "vars": {}}
-                from_gui_queue.put("gui-ready")
-                print_data(data)
-                int_print(f"END: process_data_stream [init graph]")
-                return [data, interval_count]
-
-            if interval_count is None:
-                print("err")
-            interval_count = interval_count + 1
-
-            msg = None
-            while not to_gui_queue.empty():
-                try:
-                    msg = to_gui_queue.get_nowait()
-                    # print(f"n_intervals: {n_intervals}")
-                    append_new_data_to_store(data, msg)
-                except queue.Empty:
-                    break
-                except Exception as e:
+                # RemotePdb("127.0.0.1", 4444).set_trace()
+                if initialised.acquire(block=False):
+                    interval_count = 0
+                    int_print(f"PROCESS_DATA_STREAM: INIT")
+                    data = {"t": [0], "vars": {}}
+                    from_gui_queue.put("gui-ready")
                     print_data(data)
-                    int_print(f"exception: {e} on {msg}")
-                    int_print(f"END: process_data_stream")
-                    return [dash.no_update, interval_count]
+                    int_print(f"END: process_data_stream [init graph]")
+                    return [data, interval_count]
 
-            if msg is not None:
-                print_data(data)
-                int_print(f"END: process_data_stream [update graph]")
-                return [data, interval_count]
-            else:
-                int_print(f"END: process_data_stream [no graph update]")
-                return [dash.no_update, interval_count]
-        except Exception as e:
-            logging.error(f"Error in process_data_stream: {e}")
-        finally:
-            logging.info("Exiting process_data_stream")
+                if interval_count is None:
+                    print("err")
+                interval_count = interval_count + 1
+
+                msg = None
+                while not to_gui_queue.empty():
+                    try:
+                        msg = to_gui_queue.get_nowait()
+                        # print(f"n_intervals: {n_intervals}")
+                        append_new_data_to_store(data, msg)
+                    except queue.Empty:
+                        break
+                    except Exception as e:
+                        print_data(data)
+                        int_print(f"exception: {e} on {msg}")
+                        int_print(f"END: process_data_stream")
+                        return [dash.no_update, interval_count]
+
+                if msg is not None:
+                    print_data(data)
+                    int_print(f"END: process_data_stream [update graph]")
+                    return [data, interval_count]
+                else:
+                    int_print(f"END: process_data_stream [no graph update]")
+                    return [dash.no_update, interval_count]
+            except Exception as e:
+                logging.error(f"Error in process_data_stream: {e}")
+            finally:
+                logging.info("Exiting process_data_stream")
+                lock.release()
+        else:
+            # Ignore this call if the previous one hasn't finished
+            return [dash.no_update, interval_count]
 
     # Create callbacks
     @app.callback(
@@ -197,4 +203,4 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
 
         return [fig]
 
-    app.run_server(debug=False, use_reloader=False, threaded=True)
+    app.run(debug=False, use_reloader=False)

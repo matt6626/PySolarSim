@@ -20,7 +20,7 @@ class buck_converter:
         output_voltage_limit=np.Inf,
         inductor_current_limit=np.Inf,
         synchronous=False,
-        controller=vmc.voltage_mode_controller(),
+        controller=None,
     ) -> None:
         self.L = L
         self.Lesr = Lesr
@@ -33,6 +33,8 @@ class buck_converter:
         self.output_current_limit = output_current_limit
         self.inductor_current_limit = inductor_current_limit
         self.synchronous = synchronous
+        if controller is None:
+            controller = vmc.voltage_mode_controller()
         self.controller = controller
 
         # GUI App - currently associated per buck converter instance

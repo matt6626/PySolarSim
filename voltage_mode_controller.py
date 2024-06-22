@@ -1,7 +1,8 @@
 import numpy as np
-from collections import namedtuple
+from collections import namedtuple, deque
 import plot_helper as ph
 from multiprocessing import Queue
+import queue
 import time
 
 class voltage_mode_controller:
@@ -20,6 +21,7 @@ class voltage_mode_controller:
         self.gui_ready = False
         self.plot_enabled = False
         self.last_sim_time = time.time()
+        self.to_gui_queue_buffer: deque = deque()
 
     def control_func(self, reference, input, dt):
         return input
@@ -78,9 +80,21 @@ class voltage_mode_controller:
             vars[key] = value
         state = {"dt": dt, "vars": vars}
         try:
-            to_gui_queue.put(state)
+            while len(self.to_gui_queue_buffer) > 0:
+                try:
+                    buffer_state = self.to_gui_queue_buffer.popleft()
+                    to_gui_queue.put(buffer_state, block=False)
+                except queue.Full:
+                    # print(
+                    #     "to_gui_queue is full. storing buffer_state back into to_gui_queue_buffer..."
+                    # )
+                    self.to_gui_queue_buffer.appendleft(buffer_state)
+            to_gui_queue.put(state, block=False)
+        except queue.Full:
+            # print("to_gui_queue is full. storing in to_gui_queue_buffer...")
+            self.to_gui_queue_buffer.append(state)
         except Exception as e:
-            print("exception: {e}")
+            print(f"exception: {e}")
 
     def bode(self):
         import bode_plot as bp
