@@ -33,7 +33,7 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
         [
             dcc.Graph(id="live-graph"),
             # TODO: investigate data stores not updating when the callback interval is short (eg. 100 ms)
-            dcc.Interval(id="data-stream", interval=100, n_intervals=0),
+            dcc.Interval(id="data-stream", interval=1000, n_intervals=0),
             dcc.Store(id="interval-count", clear_data=True),
             dcc.Store(id="data-store", clear_data=True),
             # dcc.Store(id="dummy-output"),
@@ -42,24 +42,6 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
 
     def append_new_data_to_store(store, msg):
         # print("START: append_new_data_to_store")
-
-        # Append the time step based on delta time received
-        prev_time = store["t"][-1]
-        # print(f'prev_store["t"]: {store["t"]}')
-        dt = msg["dt"]
-
-        if prev_time is None or dt is None:
-            print("error")
-            print(f"prev_time: {prev_time}")
-            print(f"dt: {dt}")
-
-        curr_time = prev_time + dt
-        # print(f"prev_time: {prev_time*10**6}")
-
-        # print(f"dt: {dt}")
-        # print(f"curr_time: {curr_time*10**6}")
-        store["t"].append(curr_time)
-        # print(f'post_store["t"]: {store["t"]}')
 
         # Append the data from any variable received
         store_vars = store.get("vars", {})  # Copy of existing vars history
@@ -72,13 +54,8 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
         store["vars"] = store_vars
 
         recvd_time = recvd_vars["t"]
+        store["t"].append(recvd_time)
 
-        if curr_time != recvd_time:
-            # print(f"curr_time: {curr_time}")
-            # print(f'vars["t"]: {vars["t"]}')
-            raise Exception(
-                f"curr_time: {curr_time} does not equal recvd_time: {recvd_time}"
-            )
         # print(f"END: append_new_data_to_store\n")
 
     lock = Lock()
@@ -149,6 +126,7 @@ def gui(to_gui_queue: Queue, from_gui_queue: Queue):
                 logging.info("Exiting process_data_stream")
                 lock.release()
         else:
+            logging.info("Exiting process_data_stream (locked)")
             # Ignore this call if the previous one hasn't finished
             return [dash.no_update, interval_count]
 
